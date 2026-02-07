@@ -29,7 +29,6 @@ export const getAvatarRouter = (db: Database, log: winston.Logger) => {
                     res.set("Cache-control", "public, max-age=31536000");
 
                     // Send the buffer directly instead of streaming to avoid race conditions
-                    // with the previous checks in this specific implementation
                     res.send(buffer);
                 }
             } catch (e) {
