@@ -144,7 +144,7 @@ export const initApp = (
 
     api.use(cors({ credentials: true }));
 
-    api.get("/server/:id", protect, async (req, res) => {
+    api.get("/server/:id", async (req, res) => {
         const server = await db.retrieveServer(req.params.id);
 
         if (server) {
