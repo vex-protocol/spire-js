@@ -56,7 +56,7 @@ export const getInviteRouter = (
         notify(userDetails.userID, "permission", uuid.v4(), permission);
     });
 
-    router.get("/:inviteID", protect, async (req, res) => {
+    router.get("/:inviteID", async (req, res) => {
         const invite = await db.retrieveInvite(req.params.inviteID);
         if (!invite) {
             res.sendStatus(404);
