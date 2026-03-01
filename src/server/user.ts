@@ -19,7 +19,7 @@ export const getUserRouter = (
 ) => {
     const router = express.Router();
 
-    router.get("/:id", protect, async (req, res) => {
+    router.get("/:id", async (req, res) => {
         const user = await db.retrieveUser(req.params.id);
 
         if (user) {
