@@ -316,9 +316,8 @@ export const initApp = (
         const userDetails: ICensoredUser = (req as any).user;
         const serverID = req.params.serverID;
         try {
-            const permissions = await db.retrievePermissionsByResourceID(
-                serverID
-            );
+            const permissions =
+                await db.retrievePermissionsByResourceID(serverID);
             if (permissions) {
                 let found = false;
                 for (const perm of permissions) {
@@ -448,9 +447,8 @@ export const initApp = (
             for (const permission of permissions) {
                 if (permission.resourceID === channel.serverID) {
                     // we've got the permission, it's ok to give them the userlist
-                    const groupMembers = await db.retrieveGroupMembers(
-                        channelID
-                    );
+                    const groupMembers =
+                        await db.retrieveGroupMembers(channelID);
                     res.send(
                         msgpack.encode(
                             groupMembers.map((user) => censorUser(user))

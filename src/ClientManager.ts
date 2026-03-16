@@ -346,11 +346,15 @@ export class ClientManager extends EventEmitter {
                 chalk.bold("⟵   ") +
                     (msg.type === "resource"
                         ? crudColor(
-                              (msg as XTypes.WS.IResourceMsg).action.toUpperCase()
+                              (
+                                  msg as XTypes.WS.IResourceMsg
+                              ).action.toUpperCase()
                           ) +
                           " " +
                           chalk.bold(
-                              (msg as XTypes.WS.IResourceMsg).resourceType.toUpperCase()
+                              (
+                                  msg as XTypes.WS.IResourceMsg
+                              ).resourceType.toUpperCase()
                           )
                         : chalk.bold(msg.type.toUpperCase())) +
                     " " +

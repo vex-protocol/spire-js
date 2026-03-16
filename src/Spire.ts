@@ -16,11 +16,7 @@ import WebSocket from "ws";
 import jwt from "jsonwebtoken";
 import msgpack from "msgpack-lite";
 import { ClientManager } from "./ClientManager";
-import {
-    Database,
-    verifyPassword,
-    upgradeHashIfNeeded,
-} from "./Database";
+import { Database, verifyPassword, upgradeHashIfNeeded } from "./Database";
 import { initApp, protect } from "./server";
 import { censorUser, ICensoredUser } from "./server/utils";
 import { createLogger } from "./utils/createLogger";
@@ -339,9 +335,9 @@ export class Spire extends EventEmitter {
         });
 
         this.api.post("/mail", protect, async (req, res) => {
-            const senderDeviceDetails:
-                | XTypes.SQL.IDevice
-                | undefined = (req as any).device;
+            const senderDeviceDetails: XTypes.SQL.IDevice | undefined = (
+                req as any
+            ).device;
             if (!senderDeviceDetails) {
                 res.sendStatus(401);
                 return;
@@ -456,8 +452,7 @@ export class Spire extends EventEmitter {
                 const regPayload: XTypes.HTTP.IRegistrationPayload = req.body;
                 if (!usernameRegex.test(regPayload.username)) {
                     res.status(400).send({
-                        error:
-                            "Username must be between three and nineteen letters, digits, or underscores.",
+                        error: "Username must be between three and nineteen letters, digits, or underscores.",
                     });
                     return;
                 }
@@ -493,15 +488,13 @@ export class Spire extends EventEmitter {
                                 );
                                 if (usernameConflict) {
                                     res.status(400).send({
-                                        error:
-                                            "Username is already registered.",
+                                        error: "Username is already registered.",
                                     });
                                     return;
                                 }
                                 if (signKeyConflict) {
                                     res.status(400).send({
-                                        error:
-                                            "Public key is already registered.",
+                                        error: "Public key is already registered.",
                                     });
                                     return;
                                 }

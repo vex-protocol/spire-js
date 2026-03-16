@@ -2,7 +2,7 @@ import { xMakeNonce, XUtils } from "@vex-chat/crypto";
 import { XTypes } from "@vex-chat/types";
 import argon2 from "argon2";
 import { EventEmitter } from "events";
-import knex from "knex";
+import knex, { Knex } from "knex";
 import pbkdf2 from "pbkdf2";
 import * as uuid from "uuid";
 import winston from "winston";
@@ -22,7 +22,7 @@ export interface IUserRow extends XTypes.SQL.IUser {
 }
 
 export class Database extends EventEmitter {
-    private db: knex<any, unknown[]>;
+    private db: Knex;
     private log: winston.Logger;
 
     constructor(options?: ISpireOptions) {
@@ -33,7 +33,7 @@ export class Database extends EventEmitter {
         switch (options?.dbType || "mysql") {
             case "sqlite3":
                 this.db = knex({
-                    client: "sqlite3",
+                    client: "better-sqlite3",
                     connection: {
                         filename: "spire.sqlite",
                     },
@@ -42,7 +42,7 @@ export class Database extends EventEmitter {
                 break;
             case "sqlite3mem":
                 this.db = knex({
-                    client: "sqlite3",
+                    client: "better-sqlite3",
                     connection: {
                         filename: ":memory:",
                     },
@@ -160,15 +160,9 @@ export class Database extends EventEmitter {
     }
 
     public async deleteDevice(deviceID: string): Promise<void> {
-        await this.db
-            .from("preKeys")
-            .where({ deviceID })
-            .del();
+        await this.db.from("preKeys").where({ deviceID }).del();
 
-        await this.db
-            .from("oneTimeKeys")
-            .where({ deviceID })
-            .del();
+        await this.db.from("oneTimeKeys").where({ deviceID }).del();
 
         return this.db
             .from("devices")
@@ -284,10 +278,7 @@ export class Database extends EventEmitter {
     public async retrieveInvite(
         inviteID: string
     ): Promise<XTypes.SQL.IInvite | null> {
-        const rows = await this.db
-            .from("invites")
-            .select()
-            .where({ inviteID });
+        const rows = await this.db.from("invites").select().where({ inviteID });
         if (rows.length === 0) {
             return null;
         }
@@ -297,12 +288,9 @@ export class Database extends EventEmitter {
     public async retrieveServerInvites(
         serverID: string
     ): Promise<XTypes.SQL.IInvite[]> {
-        const rows = await this.db
-            .from("invites")
-            .select()
-            .where({ serverID });
+        const rows = await this.db.from("invites").select().where({ serverID });
 
-        return rows.filter((invite) => {
+        return rows.filter((invite: any) => {
             const valid =
                 new Date(Date.now()).getTime() <
                 new Date(invite.expiration).getTime();
@@ -316,10 +304,7 @@ export class Database extends EventEmitter {
     }
 
     public async deleteInvite(inviteID: string): Promise<void> {
-        await this.db
-            .from("invites")
-            .where({ inviteID })
-            .delete();
+        await this.db.from("invites").where({ inviteID }).delete();
     }
 
     public async createInvite(
@@ -426,9 +411,8 @@ export class Database extends EventEmitter {
     public async retrieveAffectedUsers(
         resourceID: string
     ): Promise<XTypes.SQL.IUser[]> {
-        const permissionList = await this.retrievePermissionsByResourceID(
-            resourceID
-        );
+        const permissionList =
+            await this.retrievePermissionsByResourceID(resourceID);
 
         const users: XTypes.SQL.IUser[] = [];
         for (const permission of permissionList) {
@@ -444,10 +428,7 @@ export class Database extends EventEmitter {
     public async retrievePermissionsByResourceID(
         resourceID: string
     ): Promise<XTypes.SQL.IPermission[]> {
-        return this.db
-            .from("permissions")
-            .select()
-            .where({ resourceID });
+        return this.db.from("permissions").select().where({ resourceID });
     }
 
     public async retrievePermissions(
@@ -484,17 +465,11 @@ export class Database extends EventEmitter {
     }
 
     public async deletePermissions(resourceID: string): Promise<void> {
-        await this.db
-            .from("permissions")
-            .where({ resourceID })
-            .delete();
+        await this.db.from("permissions").where({ resourceID }).delete();
     }
 
     public async deletePermission(permissionID: string): Promise<void> {
-        await this.db
-            .from("permissions")
-            .where({ permissionID })
-            .delete();
+        await this.db.from("permissions").where({ permissionID }).delete();
     }
 
     public async retrievePermission(
@@ -514,14 +489,8 @@ export class Database extends EventEmitter {
 
     public async deleteChannel(channelID: string): Promise<void> {
         await this.deletePermissions(channelID);
-        await this.db
-            .from("mail")
-            .where({ group: channelID })
-            .delete();
-        await this.db
-            .from("channels")
-            .where({ channelID })
-            .delete();
+        await this.db.from("mail").where({ group: channelID }).delete();
+        await this.db.from("channels").where({ channelID }).delete();
     }
 
     public async createEmoji(emoji: XTypes.SQL.IEmoji): Promise<void> {
@@ -529,28 +498,19 @@ export class Database extends EventEmitter {
     }
 
     public async deleteEmoji(emojiID: string): Promise<void> {
-        await this.db
-            .from("emojis")
-            .where({ emojiID })
-            .del();
+        await this.db.from("emojis").where({ emojiID }).del();
     }
 
     public async retrieveEmojiList(
         userID: string
     ): Promise<XTypes.SQL.IEmoji[]> {
-        return this.db
-            .from("emojis")
-            .select()
-            .where({ owner: userID });
+        return this.db.from("emojis").select().where({ owner: userID });
     }
 
     public async retrieveEmoji(
         emojiID: string
     ): Promise<XTypes.SQL.IEmoji | null> {
-        const rows = await this.db
-            .from("emojis")
-            .select()
-            .where({ emojiID });
+        const rows = await this.db.from("emojis").select().where({ emojiID });
         if (rows.length === 0) {
             return null;
         }
@@ -563,10 +523,7 @@ export class Database extends EventEmitter {
         for (const channel of channels) {
             await this.deleteChannel(channel.channelID);
         }
-        await this.db
-            .from("servers")
-            .where({ serverID })
-            .delete();
+        await this.db.from("servers").where({ serverID }).delete();
     }
 
     public async retrieveServers(
@@ -621,10 +578,7 @@ export class Database extends EventEmitter {
     public async retrieveFile(
         fileID: string
     ): Promise<XTypes.SQL.IFile | null> {
-        const file = await this.db
-            .from("files")
-            .select()
-            .where({ fileID });
+        const file = await this.db.from("files").select().where({ fileID });
         if (file.length === 0) {
             return null;
         }
@@ -762,125 +716,156 @@ export class Database extends EventEmitter {
 
     private async init(): Promise<void> {
         if (!(await this.db.schema.hasTable("invites"))) {
-            await this.db.schema.createTable("invites", (table) => {
-                table.string("inviteID").primary();
-                table.string("serverID").index();
-                table.string("owner");
-                table.string("expiration");
-            });
+            await this.db.schema.createTable(
+                "invites",
+                (table: Knex.CreateTableBuilder) => {
+                    table.string("inviteID").primary();
+                    table.string("serverID").index();
+                    table.string("owner");
+                    table.string("expiration");
+                }
+            );
         }
 
         if (!(await this.db.schema.hasTable("users"))) {
-            await this.db.schema.createTable("users", (table) => {
-                table.string("userID").primary();
-                table.string("username").unique();
-                table.string("passwordHash");
-                table.string("passwordSalt");
-                table.dateTime("lastSeen");
-                table
-                    .integer("hashVersion")
-                    .notNullable()
-                    .defaultTo(HASH_V1_PBKDF2);
-            });
-        } else if (
-            !(await this.db.schema.hasColumn("users", "hashVersion"))
-        ) {
+            await this.db.schema.createTable(
+                "users",
+                (table: Knex.CreateTableBuilder) => {
+                    table.string("userID").primary();
+                    table.string("username").unique();
+                    table.string("passwordHash");
+                    table.string("passwordSalt");
+                    table.dateTime("lastSeen");
+                    table
+                        .integer("hashVersion")
+                        .notNullable()
+                        .defaultTo(HASH_V1_PBKDF2);
+                }
+            );
+        } else if (!(await this.db.schema.hasColumn("users", "hashVersion"))) {
             // Migrate existing users table — add hashVersion defaulting to PBKDF2
-            await this.db.schema.alterTable("users", (table) => {
-                table
-                    .integer("hashVersion")
-                    .notNullable()
-                    .defaultTo(HASH_V1_PBKDF2);
-            });
+            await this.db.schema.alterTable(
+                "users",
+                (table: Knex.AlterTableBuilder) => {
+                    table
+                        .integer("hashVersion")
+                        .notNullable()
+                        .defaultTo(HASH_V1_PBKDF2);
+                }
+            );
         }
         if (!(await this.db.schema.hasTable("devices"))) {
-            await this.db.schema.createTable("devices", (table) => {
-                table.string("deviceID").primary();
-                table.string("signKey").unique();
-                table.string("owner");
-                table.string("name");
-                table.string("lastLogin");
-                table.boolean("deleted");
-            });
+            await this.db.schema.createTable(
+                "devices",
+                (table: Knex.CreateTableBuilder) => {
+                    table.string("deviceID").primary();
+                    table.string("signKey").unique();
+                    table.string("owner");
+                    table.string("name");
+                    table.string("lastLogin");
+                    table.boolean("deleted");
+                }
+            );
         }
         if (!(await this.db.schema.hasTable("mail"))) {
-            await this.db.schema.createTable("mail", (table) => {
-                table.string("nonce").primary();
-                table.string("recipient").index();
-                table.string("mailID");
-                table.string("sender");
-                table.string("header");
-                table.text("cipher", "mediumtext");
-                table.string("group");
-                table.text("extra");
-                table.integer("mailType");
-                table.dateTime("time");
-                table.boolean("forward");
-                table.string("authorID");
-                table.string("readerID");
-            });
+            await this.db.schema.createTable(
+                "mail",
+                (table: Knex.CreateTableBuilder) => {
+                    table.string("nonce").primary();
+                    table.string("recipient").index();
+                    table.string("mailID");
+                    table.string("sender");
+                    table.string("header");
+                    table.text("cipher", "mediumtext");
+                    table.string("group");
+                    table.text("extra");
+                    table.integer("mailType");
+                    table.dateTime("time");
+                    table.boolean("forward");
+                    table.string("authorID");
+                    table.string("readerID");
+                }
+            );
         }
         if (!(await this.db.schema.hasTable("preKeys"))) {
-            await this.db.schema.createTable("preKeys", (table) => {
-                table.string("keyID").primary();
-                table.string("userID").index();
-                table
-                    .string("deviceID")
-                    .index()
-                    .unique();
-                table.string("publicKey");
-                table.string("signature");
-                table.integer("index");
-            });
+            await this.db.schema.createTable(
+                "preKeys",
+                (table: Knex.CreateTableBuilder) => {
+                    table.string("keyID").primary();
+                    table.string("userID").index();
+                    table.string("deviceID").index().unique();
+                    table.string("publicKey");
+                    table.string("signature");
+                    table.integer("index");
+                }
+            );
         }
         if (!(await this.db.schema.hasTable("oneTimeKeys"))) {
-            await this.db.schema.createTable("oneTimeKeys", (table) => {
-                table.string("keyID").primary();
-                table.string("userID").index();
-                table.string("deviceID").index();
-                table.string("publicKey");
-                table.string("signature");
-                table.integer("index");
-            });
+            await this.db.schema.createTable(
+                "oneTimeKeys",
+                (table: Knex.CreateTableBuilder) => {
+                    table.string("keyID").primary();
+                    table.string("userID").index();
+                    table.string("deviceID").index();
+                    table.string("publicKey");
+                    table.string("signature");
+                    table.integer("index");
+                }
+            );
         }
         if (!(await this.db.schema.hasTable("servers"))) {
-            await this.db.schema.createTable("servers", (table) => {
-                table.string("serverID").primary();
-                table.string("name");
-                table.string("icon");
-            });
+            await this.db.schema.createTable(
+                "servers",
+                (table: Knex.CreateTableBuilder) => {
+                    table.string("serverID").primary();
+                    table.string("name");
+                    table.string("icon");
+                }
+            );
         }
         if (!(await this.db.schema.hasTable("channels"))) {
-            await this.db.schema.createTable("channels", (table) => {
-                table.string("channelID").primary();
-                table.string("serverID");
-                table.string("name");
-            });
+            await this.db.schema.createTable(
+                "channels",
+                (table: Knex.CreateTableBuilder) => {
+                    table.string("channelID").primary();
+                    table.string("serverID");
+                    table.string("name");
+                }
+            );
         }
         if (!(await this.db.schema.hasTable("permissions"))) {
-            await this.db.schema.createTable("permissions", (table) => {
-                table.string("permissionID").primary();
-                table.string("userID").index();
-                table.string("resourceType");
-                table.string("resourceID").index();
-                table.integer("powerLevel");
-            });
+            await this.db.schema.createTable(
+                "permissions",
+                (table: Knex.CreateTableBuilder) => {
+                    table.string("permissionID").primary();
+                    table.string("userID").index();
+                    table.string("resourceType");
+                    table.string("resourceID").index();
+                    table.integer("powerLevel");
+                }
+            );
         }
 
         if (!(await this.db.schema.hasTable("files"))) {
-            await this.db.schema.createTable("files", (table) => {
-                table.string("fileID").primary();
-                table.string("owner").index();
-                table.string("nonce");
-            });
+            await this.db.schema.createTable(
+                "files",
+                (table: Knex.CreateTableBuilder) => {
+                    table.string("fileID").primary();
+                    table.string("owner").index();
+                    table.string("nonce");
+                }
+            );
         }
 
         if (!(await this.db.schema.hasTable("emojis"))) {
-            await this.db.schema.createTable("emojis", (table) => {
-                table.string("emojiID").primary();
-                table.string("owner").index();
-                table.string("name");
-            });
+            await this.db.schema.createTable(
+                "emojis",
+                (table: Knex.CreateTableBuilder) => {
+                    table.string("emojiID").primary();
+                    table.string("owner").index();
+                    table.string("name");
+                }
+            );
         }
 
         this.emit("ready");
