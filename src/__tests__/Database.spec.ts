@@ -78,35 +78,23 @@ describe("Database", () => {
     // });
 
     describe("getPreKeys", () => {
-        it("returns a preKey by deviceID if said preKey exists.", async (done) => {
-            // Arrange
-            expect.assertions(1); // in case there are async issues the test will fail in ci
-
-            // Act
+        it("returns a preKey by deviceID if said preKey exists.", async () => {
             const provider = new Database(options);
+            await new Promise<void>((resolve) => provider.on("ready", resolve));
 
-            provider.on("ready", async () => {
-                await provider["db"]("preKeys").insert(testSQLPreKey);
-                const result = await provider.getPreKeys(deviceID);
+            await provider["db"]("preKeys").insert(testSQLPreKey);
+            const result = await provider.getPreKeys(deviceID);
 
-                // Assert
-                expect(result).toEqual(testWSPreKey);
-                done();
-            });
+            expect(result).toEqual(testWSPreKey);
         });
 
-        it("return null if there are no preKeys with deviceID param", async (done) => {
-            // Arrange
-            expect.assertions(1); // in case there are async issues the test will fail in ci
-            // Act
+        it("return null if there are no preKeys with deviceID param", async () => {
             const provider = new Database(options);
-            provider.on("ready", async () => {
-                const result = await provider.getPreKeys(deviceID);
+            await new Promise<void>((resolve) => provider.on("ready", resolve));
 
-                // Assert
-                expect(result).toBeNull();
-                done();
-            });
+            const result = await provider.getPreKeys(deviceID);
+
+            expect(result).toBeNull();
         });
     });
 });
