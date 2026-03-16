@@ -4,7 +4,7 @@ import { XTypes } from "@vex-chat/types";
 import chalk from "chalk";
 import { EventEmitter } from "events";
 import msgpack from "msgpack-lite";
-import nacl from "tweetnacl";
+import { signOpen } from "./utils/naclCompat";
 import {
     parse as uuidParse,
     v4 as uuidv4,
@@ -187,7 +187,7 @@ export class ClientManager extends EventEmitter {
             const devices = await this.db.retrieveUserDeviceList([user.userID]);
             let message: Uint8Array | null = null;
             for (const device of devices) {
-                const verified = nacl.sign.open(
+                const verified = signOpen(
                     msg.signed,
                     XUtils.decodeHex(device.signKey)
                 );
@@ -203,7 +203,7 @@ export class ClientManager extends EventEmitter {
                 return;
             }
 
-            if (XUtils.bytesEqual(this.challengeID, message)) {
+            if (XUtils.bytesEqual(this.challengeID.buffer, message.buffer)) {
                 this.user = user;
                 this.authorize(msg.transmissionID);
             } else {

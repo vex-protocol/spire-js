@@ -1,7 +1,7 @@
 import { XUtils } from "@vex-chat/crypto";
 import { XTypes } from "@vex-chat/types";
 import express from "express";
-import nacl from "tweetnacl";
+import { signOpen } from "../utils/naclCompat";
 import { stringify } from "uuid";
 import winston from "winston";
 import { protect } from ".";
@@ -83,7 +83,7 @@ export const getUserRouter = (
         const userDetails = (req as any).user;
         const devicePayload: XTypes.HTTP.IDevicePayload = req.body;
 
-        const token = nacl.sign.open(
+        const token = signOpen(
             XUtils.decodeHex(devicePayload.signed),
             XUtils.decodeHex(devicePayload.signKey)
         );

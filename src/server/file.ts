@@ -5,7 +5,6 @@ import { XUtils } from "@vex-chat/crypto";
 import { XTypes } from "@vex-chat/types";
 import express from "express";
 import multer from "multer";
-import nacl from "tweetnacl";
 import { v4 } from "uuid";
 import winston from "winston";
 

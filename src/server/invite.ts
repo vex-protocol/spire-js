@@ -7,7 +7,6 @@ import express from "express";
 import FileType from "file-type";
 import msgpack from "msgpack-lite";
 import multer from "multer";
-import nacl from "tweetnacl";
 import * as uuid from "uuid";
 import winston from "winston";
 

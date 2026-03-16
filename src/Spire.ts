@@ -7,7 +7,8 @@ import { EventEmitter } from "events";
 import express from "express";
 import expressWs from "express-ws";
 
-import nacl from "tweetnacl";
+import { keyPairFromSecretKey, signOpen } from "./utils/naclCompat";
+import type { SignKeyPair } from "./utils/naclCompat";
 import * as uuid from "uuid";
 import winston from "winston";
 import WebSocket from "ws";
@@ -57,7 +58,7 @@ export class Spire extends EventEmitter {
     private api = this.expWs.app;
     private wss: WebSocket.Server = this.expWs.getWss();
 
-    private signKeys: nacl.SignKeyPair;
+    private signKeys: SignKeyPair;
 
     private actionTokens: XTypes.HTTP.IActionToken[] = [];
 
@@ -67,7 +68,7 @@ export class Spire extends EventEmitter {
 
     constructor(SK: string, options?: ISpireOptions) {
         super();
-        this.signKeys = nacl.sign.keyPair.fromSecretKey(XUtils.decodeHex(SK));
+        this.signKeys = keyPairFromSecretKey(XUtils.decodeHex(SK));
 
         this.db = new Database(options);
 
@@ -451,7 +452,7 @@ export class Spire extends EventEmitter {
                     return;
                 }
 
-                const regKey = nacl.sign.open(
+                const regKey = signOpen(
                     XUtils.decodeHex(regPayload.signed),
                     XUtils.decodeHex(regPayload.signKey)
                 );

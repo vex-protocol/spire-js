@@ -19,7 +19,8 @@ import FileType from "file-type";
 import jwt from "jsonwebtoken";
 import msgpack from "msgpack-lite";
 import multer from "multer";
-import nacl from "tweetnacl";
+import { signOpen } from "../utils/naclCompat";
+import type { SignKeyPair } from "../utils/naclCompat";
 import { getAvatarRouter } from "./avatar";
 import { getFileRouter } from "./file";
 import { getInviteRouter } from "./invite";
@@ -109,7 +110,7 @@ export const initApp = (
     db: Database,
     log: winston.Logger,
     tokenValidator: (key: string, scope: XTypes.HTTP.TokenScopes) => boolean,
-    signKeys: nacl.SignKeyPair,
+    signKeys: SignKeyPair,
     notify: (
         userID: string,
         event: string,
@@ -515,7 +516,7 @@ export const initApp = (
             return;
         }
 
-        const regKey = nacl.sign.open(signed, XUtils.decodeHex(device.signKey));
+        const regKey = signOpen(signed, XUtils.decodeHex(device.signKey));
         if (
             regKey &&
             tokenValidator(uuid.stringify(regKey), TokenScopes.Connect)
@@ -571,7 +572,7 @@ export const initApp = (
             return;
         }
 
-        const message = nacl.sign.open(
+        const message = signOpen(
             otk.signature,
             XUtils.decodeHex(device.signKey)
         );

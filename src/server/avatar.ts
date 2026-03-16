@@ -5,7 +5,6 @@ import { XTypes } from "@vex-chat/types";
 import express from "express";
 import FileType from "file-type";
 import multer from "multer";
-import nacl from "tweetnacl";
 import winston from "winston";
 
 import { ALLOWED_IMAGE_TYPES, protect } from ".";

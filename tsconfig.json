@@ -24,6 +24,7 @@
 
         /* Strict Type-Checking Options */
         "strict": true /* Enable all strict type-checking options. */,
+        "useUnknownInCatchVariables": false /* Restore TS4 catch(err: any) behavior — avoids touching every catch block */,
         // "noImplicitAny": true,                 /* Raise error on expressions and declarations with an implied 'any' type. */
         // "strictNullChecks": true,              /* Enable strict null checks. */
         // "strictFunctionTypes": true,           /* Enable strict checking of function types. */
@@ -61,7 +62,8 @@
         // "emitDecoratorMetadata": true,         /* Enables experimental support for emitting type metadata for decorators. */
 
         /* Advanced Options */
-        "forceConsistentCasingInFileNames": true /* Disallow inconsistently-cased references to the same file. */
+        "forceConsistentCasingInFileNames": true /* Disallow inconsistently-cased references to the same file. */,
+        "skipLibCheck": true /* Skip type checking .d.ts in node_modules (noble/curves uses .ts import extensions) */
     },
     "exclude": ["./scripts/*", "./dist", "./node_modules"]
 }
