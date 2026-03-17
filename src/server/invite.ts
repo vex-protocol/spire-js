@@ -5,7 +5,14 @@ import { XUtils } from "@vex-chat/crypto";
 import { XTypes } from "@vex-chat/types";
 import express from "express";
 import FileType from "file-type";
-import msgpack from "msgpack-lite";
+import {
+    encode as _msgpackEncode,
+    decode as msgpackDecode,
+} from "@msgpack/msgpack";
+
+/** Wrap @msgpack/msgpack encode to return Buffer so Express sets Content-Type: application/octet-stream */
+const msgpackEncode = (data: unknown): Buffer =>
+    Buffer.from(_msgpackEncode(data));
 import multer from "multer";
 import * as uuid from "uuid";
 import winston from "winston";
@@ -51,7 +58,7 @@ export const getInviteRouter = (
             invite.serverID,
             0
         );
-        res.send(msgpack.encode(permission));
+        res.send(msgpackEncode(permission));
         notify(userDetails.userID, "permission", uuid.v4(), permission);
     });
 
@@ -61,7 +68,7 @@ export const getInviteRouter = (
             res.sendStatus(404);
             return;
         }
-        res.send(msgpack.encode(invite));
+        res.send(msgpackEncode(invite));
     });
 
     return router;

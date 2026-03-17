@@ -3,7 +3,14 @@ import { xConcat, XUtils } from "@vex-chat/crypto";
 import { XTypes } from "@vex-chat/types";
 import chalk from "chalk";
 import { EventEmitter } from "events";
-import msgpack from "msgpack-lite";
+import {
+    encode as _msgpackEncode,
+    decode as msgpackDecode,
+} from "@msgpack/msgpack";
+
+/** Wrap @msgpack/msgpack encode to return Buffer so Express sets Content-Type: application/octet-stream */
+const msgpackEncode = (data: unknown): Buffer =>
+    Buffer.from(_msgpackEncode(data));
 import {
     parse as uuidParse,
     v4 as uuidv4,
@@ -33,16 +40,16 @@ function emptyHeader() {
 const MAX_MSG_SIZE = 2048;
 
 function unpackMessage(msg: Buffer): [Uint8Array, XTypes.WS.IBaseMsg] {
-    const msgp = Uint8Array.from(msg);
+    const msgp = new Uint8Array(msg);
 
     const msgh = msgp.slice(0, 32);
-    const msgb = msgpack.decode(msgp.slice(32));
+    const msgb = msgpackDecode(msgp.slice(32)) as XTypes.WS.IBaseMsg;
 
     return [msgh, msgb];
 }
 
 function packMessage(msg: any, header?: Uint8Array) {
-    const msgb = Uint8Array.from(msgpack.encode(msg));
+    const msgb = msgpackEncode(msg);
     const msgh = header || emptyHeader();
     return xConcat(msgh, msgb);
 }

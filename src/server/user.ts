@@ -1,7 +1,14 @@
 import { XUtils } from "@vex-chat/crypto";
 import { XTypes } from "@vex-chat/types";
 import express from "express";
-import msgpack from "msgpack-lite";
+import {
+    encode as _msgpackEncode,
+    decode as msgpackDecode,
+} from "@msgpack/msgpack";
+
+/** Wrap @msgpack/msgpack encode to return Buffer so Express sets Content-Type: application/octet-stream */
+const msgpackEncode = (data: unknown): Buffer =>
+    Buffer.from(_msgpackEncode(data));
 import { stringify } from "uuid";
 import winston from "winston";
 
@@ -23,7 +30,7 @@ export const getUserRouter = (
         const user = await db.retrieveUser(req.params.id);
 
         if (user) {
-            return res.send(msgpack.encode(censorUser(user)));
+            return res.send(msgpackEncode(censorUser(user)));
         } else {
             res.sendStatus(404);
         }
@@ -31,7 +38,7 @@ export const getUserRouter = (
 
     router.get("/:id/devices", protect, async (req, res) => {
         const deviceList = await db.retrieveUserDeviceList([req.params.id]);
-        return res.send(msgpack.encode(deviceList));
+        return res.send(msgpackEncode(deviceList));
     });
 
     router.get("/:id/permissions", protect, async (req, res) => {
@@ -41,7 +48,7 @@ export const getUserRouter = (
                 userDetails.userID,
                 "all"
             );
-            res.send(msgpack.encode(permissions));
+            res.send(msgpackEncode(permissions));
         } catch (err) {
             res.status(500).send(err.toString());
         }
@@ -50,7 +57,7 @@ export const getUserRouter = (
     router.get("/:id/servers", protect, async (req, res) => {
         const userDetails: ICensoredUser = (req as any).user;
         const servers = await db.retrieveServers(userDetails.userID);
-        res.send(msgpack.encode(servers));
+        res.send(msgpackEncode(servers));
     });
 
     router.delete("/:userID/devices/:deviceID", protect, async (req, res) => {
@@ -100,7 +107,7 @@ export const getUserRouter = (
                     userDetails.userID,
                     devicePayload
                 );
-                res.send(msgpack.encode(device));
+                res.send(msgpackEncode(device));
             } catch (err) {
                 console.warn(err);
                 // failed registration due to signkey being taken

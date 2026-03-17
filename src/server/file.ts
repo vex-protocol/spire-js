@@ -8,7 +8,14 @@ import multer from "multer";
 import { v4 } from "uuid";
 import winston from "winston";
 
-import msgpack from "msgpack-lite";
+import {
+    encode as _msgpackEncode,
+    decode as msgpackDecode,
+} from "@msgpack/msgpack";
+
+/** Wrap @msgpack/msgpack encode to return Buffer so Express sets Content-Type: application/octet-stream */
+const msgpackEncode = (data: unknown): Buffer =>
+    Buffer.from(_msgpackEncode(data));
 import { protect } from ".";
 import { Database } from "../Database";
 
@@ -41,10 +48,10 @@ export const getFileRouter = (db: Database, log: winston.Logger) => {
                 }
                 res.set("Cache-control", "public, max-age=31536000");
                 res.send(
-                    msgpack.encode({
+                    msgpackEncode({
                         ...entry,
                         size: stat.size,
-                        birthtime: stat.birthtime,
+                        birthtime: stat.birthtime.toISOString(),
                     })
                 );
             });
@@ -85,7 +92,7 @@ export const getFileRouter = (db: Database, log: winston.Logger) => {
         });
 
         await db.createFile(newFile);
-        res.send(msgpack.encode(newFile));
+        res.send(msgpackEncode(newFile));
     });
 
     router.post("/", protect, multer().single("file"), async (req, res) => {
@@ -120,7 +127,7 @@ export const getFileRouter = (db: Database, log: winston.Logger) => {
         });
 
         await db.createFile(newFile);
-        res.send(msgpack.encode(newFile));
+        res.send(msgpackEncode(newFile));
     });
 
     return router;

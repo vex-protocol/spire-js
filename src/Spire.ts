@@ -8,7 +8,14 @@ import express from "express";
 import expressWs from "express-ws";
 
 import jwt from "jsonwebtoken";
-import msgpack from "msgpack-lite";
+import {
+    encode as _msgpackEncode,
+    decode as msgpackDecode,
+} from "@msgpack/msgpack";
+
+/** Wrap @msgpack/msgpack encode to return Buffer so Express sets Content-Type: application/octet-stream */
+const msgpackEncode = (data: unknown): Buffer =>
+    Buffer.from(_msgpackEncode(data));
 import * as uuid from "uuid";
 import winston from "winston";
 import WebSocket from "ws";
@@ -98,6 +105,35 @@ export class Spire extends EventEmitter {
         this.wss.close();
         await this.db.close();
         return;
+    }
+
+    private initSocketClient(ws: WebSocket, userDetails: ICensoredUser): void {
+        this.log.info("New client initiated.");
+        this.log.info(JSON.stringify(userDetails));
+
+        const client = new ClientManager(
+            ws,
+            this.db,
+            this.notify.bind(this),
+            userDetails,
+            this.options
+        );
+
+        client.on("fail", () => {
+            this.log.info(
+                "Client connection is down, removing: " + client.toString()
+            );
+            if (this.clients.includes(client)) {
+                this.clients.splice(this.clients.indexOf(client), 1);
+            }
+            this.log.info("Current authorized clients: " + this.clients.length);
+        });
+
+        client.on("authed", () => {
+            this.log.info("New client authorized: " + client.toString());
+            this.clients.push(client);
+            this.log.info("Current authorized clients: " + this.clients.length);
+        });
     }
 
     private notify(
@@ -191,47 +227,39 @@ export class Spire extends EventEmitter {
         // All the app logic strongly coupled to spire class :/
         this.api.ws("/socket", (ws, req) => {
             const userDetails: ICensoredUser = (req as any).user;
-            if (!userDetails) {
-                this.log.warn("User attempted to open socket with no jwt.");
-                const err: XTypes.WS.IBaseMsg = {
-                    type: "unauthorized",
-                    transmissionID: uuid.v4(),
-                };
-                const msg = XUtils.packMessage(err);
-                ws.send(msg);
-                ws.close();
+            if (userDetails) {
+                // Already authenticated via cookie/header — proceed directly
+                this.initSocketClient(ws, userDetails);
                 return;
             }
 
-            this.log.info("New client initiated.");
-            this.log.info(JSON.stringify(userDetails));
+            // No JWT on upgrade — wait for an "auth" message with the token.
+            // This allows browser, React Native, and Node.js clients to
+            // authenticate over the already-encrypted WebSocket instead of
+            // leaking tokens in URLs or cookies.
+            const authTimeout = setTimeout(() => {
+                ws.close();
+            }, 10000);
 
-            const client = new ClientManager(
-                ws,
-                this.db,
-                this.notify.bind(this),
-                userDetails,
-                this.options
-            );
-
-            client.on("fail", () => {
-                this.log.info(
-                    "Client connection is down, removing: " + client.toString()
-                );
-                if (this.clients.includes(client)) {
-                    this.clients.splice(this.clients.indexOf(client), 1);
+            ws.once("message", (raw: Buffer) => {
+                clearTimeout(authTimeout);
+                try {
+                    const msg = msgpackDecode(
+                        new Uint8Array(raw).slice(32)
+                    ) as any;
+                    if (msg.type === "auth" && msg.token) {
+                        const result: any = jwt.verify(
+                            msg.token,
+                            process.env.SPK!
+                        );
+                        this.initSocketClient(ws, result.user);
+                    } else {
+                        ws.close();
+                    }
+                } catch (err) {
+                    this.log.warn("WS auth failed: " + err);
+                    ws.close();
                 }
-                this.log.info(
-                    "Current authorized clients: " + this.clients.length
-                );
-            });
-
-            client.on("authed", () => {
-                this.log.info("New client authorized: " + client.toString());
-                this.clients.push(client);
-                this.log.info(
-                    "Current authorized clients: " + this.clients.length
-                );
             });
         });
 
@@ -300,7 +328,14 @@ export class Spire extends EventEmitter {
                         this.deleteActionToken(token);
                     }, TOKEN_EXPIRY);
 
-                    return res.send(msgpack.encode(token));
+                    return res
+                        .type("application/octet-stream")
+                        .send(
+                            msgpackEncode({
+                                ...token,
+                                time: token.time.toISOString(),
+                            })
+                        );
                 } catch (err) {
                     console.error(err.toString());
                     return res.sendStatus(500);
@@ -315,7 +350,7 @@ export class Spire extends EventEmitter {
             }
 
             res.send(
-                msgpack.encode({
+                msgpackEncode({
                     user: (req as any).user,
                     exp: (req as any).exp,
                     token: req.cookies.auth,
@@ -441,9 +476,7 @@ export class Spire extends EventEmitter {
                     sameSite: "none",
                     secure: true,
                 });
-                res.send(
-                    msgpack.encode({ user: censorUser(userEntry), token })
-                );
+                res.send(msgpackEncode({ user: censorUser(userEntry), token }));
             } catch (err) {
                 this.log.error(err.toString());
                 res.sendStatus(500);
@@ -516,7 +549,7 @@ export class Spire extends EventEmitter {
                         }
                     } else {
                         this.log.info("Registration success.");
-                        res.send(msgpack.encode(censorUser(user!)));
+                        res.send(msgpackEncode(censorUser(user!)));
                     }
                 } else {
                     res.status(400).send({

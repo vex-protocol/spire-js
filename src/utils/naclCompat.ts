@@ -34,7 +34,7 @@ export function signOpen(
         return null;
     }
     const signature = signedMessage.subarray(0, 64);
-    const message = signedMessage.subarray(64);
+    const message = signedMessage.slice(64);
     try {
         return ed25519.verify(signature, message, publicKey) ? message : null;
     } catch {
