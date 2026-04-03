@@ -17,6 +17,7 @@
         "lint-fix": "./node_modules/tslint/bin/tslint src/**/*.ts{,x} --fix",
         "api-knex": "TS_NODE_COMPILER_OPTIONS='{ \"module\": \"commonjs\" }' knex --knexfile=./src/knexfile.ts",
         "test": "jest",
+        "gen-spk": "node scripts/gen-spk.js",
         "prepublish": "yarn build"
     },
     "devDependencies": {

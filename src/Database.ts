@@ -22,6 +22,7 @@ export class Database extends EventEmitter {
 
         switch (options?.dbType || "mysql") {
             case "sqlite3":
+            case "sqlite":
                 this.db = knex({
                     client: "sqlite3",
                     connection: {

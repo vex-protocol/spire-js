@@ -46,7 +46,7 @@ export interface ISpireOptions {
         | "debug"
         | "silly";
     apiPort?: number;
-    dbType?: "sqlite3" | "mysql" | "sqlite3mem";
+    dbType?: "sqlite3" | "sqlite" | "mysql" | "sqlite3mem";
 }
 
 export class Spire extends EventEmitter {
