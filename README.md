@@ -35,7 +35,7 @@ SPK={private_key_here}
 
 note:
 
-you can generate a valid SPK by running `yarn-genspk`
+you can generate a valid SPK by running `yarn gen-spk`
 
 ### sample env file for sqlite3:
 
