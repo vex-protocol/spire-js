@@ -33,7 +33,7 @@ CANARY=true
 SPK={private_key_here}
 ```
 
-note: 
+note:
 
 you can generate a valid SPK by running `yarn-genspk`
 

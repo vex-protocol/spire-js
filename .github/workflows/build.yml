@@ -20,10 +20,10 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v5
       with:
         always-auth: true
         node-version: ${{ matrix.node-version }}
@@ -31,7 +31,7 @@ jobs:
         scope: "@vex-chat"
 
     - name: Setup Cache
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: |
           node_modules
@@ -61,7 +61,7 @@ jobs:
         FILE_NAME=(*.tgz)
         echo "file_name=${FILE_NAME}" >> "$GITHUB_OUTPUT"
     - name: Store Build Artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: ${{ steps.before_deploy.outputs.file_name }}-${{ matrix.os }}
         path: ${{ steps.before_deploy.outputs.file_name }}
