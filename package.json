@@ -13,8 +13,8 @@
         "restart": "pm2 restart spire && pm2 logs spire",
         "build": "node ./node_modules/typescript/bin/tsc",
         "prettier": "node ./node_modules/prettier/bin-prettier.js '**/*.{ts,tsx,json,md}' --tab-width 4 --trailing-comma es5 --ignore-path .gitignore  --arrow-parens always --write",
-        "lint": "./node_modules/tslint/bin/tslint src/**/*.ts{,x}",
-        "lint-fix": "./node_modules/tslint/bin/tslint src/**/*.ts{,x} --fix",
+        "lint": "tslint -p tsconfig.json",
+        "lint-fix": "tslint -p tsconfig.json --fix",
         "api-knex": "TS_NODE_COMPILER_OPTIONS='{ \"module\": \"commonjs\" }' knex --knexfile=./src/knexfile.ts",
         "test": "jest",
         "gen-spk": "node scripts/gen-spk.js",
@@ -45,7 +45,7 @@
     },
     "lint-staged": {
         "src/**/*.{ts}": [
-            "./node_modules/tslint/bin/tslint -c tslint.json --fix",
+            "tslint -c tslint.json --fix",
             "git add"
         ]
     },
