@@ -29,7 +29,13 @@ API_PORT=16777
 SOCKET_PORT=16778
 
 CANARY=true
+
+SPK={private_key_here}
 ```
+
+note: 
+
+you can generate a valid SPK by running `yarn-genspk`
 
 ### sample env file for sqlite3:
 
@@ -40,6 +46,8 @@ API_PORT=16777
 SOCKET_PORT=16778
 
 CANARY=true
+
+SPK={private_key_here}
 ```
 
 ### start the project
