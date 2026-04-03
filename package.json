@@ -6,7 +6,7 @@
     "author": "Extra <extrahash@protonmail.com>",
     "license": "AGPL-3.0-or-later",
     "engines": {
-        "node": ">=18"
+        "node": ">=24.0.0"
     },
     "scripts": {
         "start": "node ./dist/run.js",
