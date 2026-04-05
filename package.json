@@ -2,12 +2,8 @@
     "name": "@vex-chat/spire",
     "version": "0.9.0-rc.0",
     "description": "Vex server implementation in NodeJS.",
+    "private": true,
     "type": "module",
-    "main": "./dist/index.js",
-    "files": [
-        "dist",
-        "scripts"
-    ],
     "author": "Extra <extrahash@protonmail.com>",
     "license": "AGPL-3.0-or-later",
     "engines": {
@@ -20,8 +16,7 @@
         "prettier": "prettier '**/*.{ts,tsx,json,md}' --tab-width 4 --trailing-comma es5 --ignore-path .gitignore --arrow-parens always --write",
         "api-knex": "TS_NODE_COMPILER_OPTIONS='{ \"module\": \"commonjs\" }' knex --knexfile=./src/knexfile.ts",
         "test": "vitest run",
-        "gen-spk": "node scripts/gen-spk.js",
-        "prepublish": "npm run build"
+        "gen-spk": "node scripts/gen-spk.js"
     },
     "peerDependencies": {
         "@vex-chat/crypto": "^1.0.0-rc.0",
