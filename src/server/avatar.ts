@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import { XUtils } from "@vex-chat/crypto";
 import type { IDevice, IFilePayload } from "@vex-chat/types";
 import express from "express";
-import FileType from "file-type";
+import { fileTypeFromBuffer, fileTypeFromFile } from "file-type";
 import multer from "multer";
 import winston from "winston";
 
@@ -15,24 +15,21 @@ export const getAvatarRouter = (db: Database, log: winston.Logger) => {
     const router = express.Router();
 
     router.get("/:userID", async (req, res) => {
-        const stream = fs.createReadStream("./avatars/" + req.params.userID);
-        stream.on("error", (err) => {
-            // log.error(err.toString());
+        const filePath = "./avatars/" + req.params.userID;
+        const typeDetails = await fileTypeFromFile(filePath).catch(() => null);
+        if (!typeDetails) {
             res.sendStatus(404);
-        });
-
-        const typeDetails = await FileType.fromStream(stream);
-        if (typeDetails) {
-            res.set("Content-type", typeDetails.mime);
+            return;
         }
-
+        res.set("Content-type", typeDetails.mime);
         res.set("Cache-control", "public, max-age=31536000");
-        const stream2 = fs.createReadStream("./avatars/" + req.params.userID);
-        stream2.on("error", (err) => {
+
+        const stream = fs.createReadStream(filePath);
+        stream.on("error", (err) => {
             log.error(err.toString());
             res.sendStatus(500);
         });
-        stream2.pipe(res);
+        stream.pipe(res);
     });
 
     router.post("/:userID/json", protect, async (req, res) => {
@@ -53,7 +50,7 @@ export const getAvatarRouter = (db: Database, log: winston.Logger) => {
         }
 
         const buf = Buffer.from(XUtils.decodeBase64(payload.file));
-        const mimeType = await FileType.fromBuffer(buf);
+        const mimeType = await fileTypeFromBuffer(buf);
         if (!ALLOWED_IMAGE_TYPES.includes(mimeType?.mime || "no/type")) {
             res.status(400).send({
                 error:
@@ -95,7 +92,7 @@ export const getAvatarRouter = (db: Database, log: winston.Logger) => {
                 return;
             }
 
-            const mimeType = await FileType.fromBuffer(req.file.buffer);
+            const mimeType = await fileTypeFromBuffer(req.file.buffer);
             if (!ALLOWED_IMAGE_TYPES.includes(mimeType?.mime || "no/type")) {
                 res.status(400).send({
                     error:

@@ -15,7 +15,7 @@ import winston from "winston";
 import { Database } from "../Database.ts";
 
 import { XUtils } from "@vex-chat/crypto";
-import FileType from "file-type";
+import { fileTypeFromBuffer, fileTypeFromFile } from "file-type";
 import jwt from "jsonwebtoken";
 import { msgpack } from "../utils/msgpack.ts";
 import multer from "multer";
@@ -597,24 +597,21 @@ export const initApp = (
     });
 
     api.get("/emoji/:emojiID", protect, async (req, res) => {
-        const stream = fs.createReadStream("./emoji/" + req.params.emojiID);
-        stream.on("error", (err) => {
-            // log.error(err.toString());
+        const filePath = "./emoji/" + req.params.emojiID;
+        const typeDetails = await fileTypeFromFile(filePath).catch(() => null);
+        if (!typeDetails) {
             res.sendStatus(404);
-        });
-
-        const typeDetails = await FileType.fromStream(stream);
-        if (typeDetails) {
-            res.set("Content-type", typeDetails.mime);
+            return;
         }
-
+        res.set("Content-type", typeDetails.mime);
         res.set("Cache-control", "public, max-age=31536000");
-        const stream2 = fs.createReadStream("./emoji/" + req.params.emojiID);
-        stream2.on("error", (err) => {
+
+        const stream = fs.createReadStream(filePath);
+        stream.on("error", (err) => {
             log.error(err.toString());
             res.sendStatus(500);
         });
-        stream2.pipe(res);
+        stream.pipe(res);
     });
 
     api.post("/emoji/:serverID/json", protect, async (req, res) => {
@@ -661,7 +658,7 @@ export const initApp = (
             res.sendStatus(413);
         }
 
-        const mimeType = await FileType.fromBuffer(buf);
+        const mimeType = await fileTypeFromBuffer(buf);
         if (!ALLOWED_IMAGE_TYPES.includes(mimeType?.mime || "no/type")) {
             res.status(400).send({
                 error:
@@ -744,7 +741,7 @@ export const initApp = (
                 res.sendStatus(413);
             }
 
-            const mimeType = await FileType.fromBuffer(req.file.buffer);
+            const mimeType = await fileTypeFromBuffer(req.file.buffer);
             if (!ALLOWED_IMAGE_TYPES.includes(mimeType?.mime || "no/type")) {
                 res.status(400).send({
                     error:
