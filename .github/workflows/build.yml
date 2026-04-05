@@ -3,26 +3,29 @@ name: Build
 on:
   push:
     branches: [master]
+  pull_request:
+    branches: [master]
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 jobs:
-  release:
-    name: Release
+  build:
+    name: Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: ".nvmrc"
-          cache: yarn
+      - name: Install mise
+        uses: jdx/mise-action@v3.5.1
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: npm ci
 
       - name: Build
-        run: yarn build
+        run: npm run build
 
-      - name: Run tests
-        run: yarn test
+      - name: Test
+        run: npm test
+
+      - name: Package
+        run: npm pack
