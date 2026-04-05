@@ -203,7 +203,12 @@ export class ClientManager extends EventEmitter {
                 return;
             }
 
-            if (XUtils.bytesEqual(this.challengeID, message)) {
+            if (
+                XUtils.bytesEqual(
+                    (this.challengeID as unknown) as ArrayBufferLike,
+                    (message as unknown) as ArrayBufferLike
+                )
+            ) {
                 this.user = user;
                 this.authorize(msg.transmissionID);
             } else {

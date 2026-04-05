@@ -1,67 +1,37 @@
-# This workflow will do a clean install of dependencies, and compile the typescript.
-
-name: build
+name: Release
 
 on:
   push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
+    branches: [master]
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 jobs:
-  build:
-
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        node-version: ["24"]
-
-    runs-on: ${{ matrix.os }}
-
+  release:
+    name: Release
+    runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v5
-      with:
-        always-auth: true
-        node-version: ${{ matrix.node-version }}
-        registry-url: "https://npm.pkg.github.com"
-        scope: "@vex-chat"
+      - name: Install mise
+        uses: jdx/mise-action@v3.5.1
 
-    - name: Setup Cache
-      uses: actions/cache@v5
-      with:
-        path: |
-          node_modules
-        key: ${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
 
-    - name: Install Dependencies
-      run: yarn --network-concurrency 1
-      env:
-        NODE_AUTH_TOKEN: ${{ secrets.CI_KEY }}
-        
-    - name: Build
-      run: yarn build
+      - name: Build
+        run: yarn build
 
-    - name: Lint
-      run: yarn lint
-        
-    - name: Run tests
-      run: yarn test 
+      - name: Run tests
+        run: yarn test
 
-    - name: Package
-      run: npm pack      
-
-    - name: Prepare Build Artifact
-      id: before_deploy
-      shell: bash
-      run: |
-        FILE_NAME=(*.tgz)
-        echo "file_name=${FILE_NAME}" >> "$GITHUB_OUTPUT"
-    - name: Store Build Artifact
-      uses: actions/upload-artifact@v6
-      with:
-        name: ${{ steps.before_deploy.outputs.file_name }}-${{ matrix.os }}
-        path: ${{ steps.before_deploy.outputs.file_name }}
+      - name: Create Release PR or Publish
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          publish: npx changeset publish
+          title: "chore: version packages"
+          commit: "chore: version packages"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

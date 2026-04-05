@@ -124,25 +124,26 @@ export const initApp = (
     const avatarRouter = getAvatarRouter(db, log);
     const inviteRouter = getInviteRouter(db, log, tokenValidator, notify);
 
-    // MIDDLEWARE
-    api.use(express.json({ limit: "20mb" }));
-    api.use(
+    // MIDDLEWARE (express-ws `Application` + TS 5.x breaks `use()` overload resolution)
+    const apiAny = api as any;
+    apiAny.use(express.json({ limit: "20mb" }));
+    apiAny.use(
         express.raw({
             type: "application/msgpack",
             limit: "20mb",
         })
     );
-    api.use(helmet());
-    api.use(cookieParser());
-    api.use(msgpackParser);
-    api.use(checkAuth);
-    api.use(checkDevice);
+    apiAny.use(helmet());
+    apiAny.use(cookieParser());
+    apiAny.use(msgpackParser);
+    apiAny.use(checkAuth);
+    apiAny.use(checkDevice);
 
     if (!jestRun()) {
-        api.use(morgan("dev", { stream: process.stdout }));
+        apiAny.use(morgan("dev", { stream: process.stdout }));
     }
 
-    api.use(cors({ credentials: true }));
+    apiAny.use(cors({ credentials: true }));
 
     api.get("/server/:id", protect, async (req, res) => {
         const server = await db.retrieveServer(req.params.id);

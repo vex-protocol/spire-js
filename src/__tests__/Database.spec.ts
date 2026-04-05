@@ -46,68 +46,86 @@ describe("Database", () => {
     };
 
     describe("saveOTK", () => {
-        it("takes a userId and one time key, adds a keyId and saves it to oneTimeKey table", async (done) => {
-            // Arrange
-            expect.assertions(1); // in case there are async issues the test will fail in ci
+        it("takes a userId and one time key, adds a keyId and saves it to oneTimeKey table", async () => {
+            expect.assertions(1);
 
             const v4Spy = jest.spyOn(uuid, "v4").mockReturnValue(keyID);
-            const createLoggerSpy = jest
-                .spyOn(winston, "createLogger")
-                .mockReturnValueOnce(({} as unknown) as winston.Logger);
+            jest.spyOn(winston, "createLogger").mockReturnValueOnce(
+                ({} as unknown) as winston.Logger
+            );
 
-            // Act
             const provider = new Database(options);
-            provider.on("ready", async () => {
-                await provider.saveOTK(
-                    testSQLPreKey.userID,
-                    testSQLPreKey.deviceID,
-                    [
-                        {
-                            publicKey,
-                            signature,
-                            index: 1,
-                            deviceID,
-                        },
-                    ]
-                );
-
-                // Assert
-                const oneTimeKey = await provider.getOTK(deviceID);
-                expect(oneTimeKey).toEqual(testWSPreKey);
-                done();
+            await new Promise<void>((resolve, reject) => {
+                provider.once("ready", () => {
+                    void (async () => {
+                        try {
+                            await provider.saveOTK(
+                                testSQLPreKey.userID,
+                                testSQLPreKey.deviceID,
+                                [
+                                    {
+                                        publicKey,
+                                        signature,
+                                        index: 1,
+                                        deviceID,
+                                    },
+                                ]
+                            );
+                            const oneTimeKey = await provider.getOTK(deviceID);
+                            expect(oneTimeKey).toEqual(testWSPreKey);
+                            await provider.close();
+                            resolve();
+                        } catch (e) {
+                            reject(e);
+                        }
+                    })();
+                });
             });
+
+            v4Spy.mockRestore();
         });
     });
 
     describe("getPreKeys", () => {
-        it("returns a preKey by deviceID if said preKey exists.", async (done) => {
-            // Arrange
-            expect.assertions(1); // in case there are async issues the test will fail in ci
+        it("returns a preKey by deviceID if said preKey exists.", async () => {
+            expect.assertions(1);
 
-            // Act
             const provider = new Database(options);
-
-            provider.on("ready", async () => {
-                await provider["db"]("preKeys").insert(testSQLPreKey);
-                const result = await provider.getPreKeys(deviceID);
-
-                // Assert
-                expect(result).toEqual(testWSPreKey);
-                done();
+            await new Promise<void>((resolve, reject) => {
+                provider.once("ready", () => {
+                    void (async () => {
+                        try {
+                            await provider["db"]("preKeys").insert(
+                                testSQLPreKey
+                            );
+                            const result = await provider.getPreKeys(deviceID);
+                            expect(result).toEqual(testWSPreKey);
+                            await provider.close();
+                            resolve();
+                        } catch (e) {
+                            reject(e);
+                        }
+                    })();
+                });
             });
         });
 
-        it("return null if there are no preKeys with deviceID param", async (done) => {
-            // Arrange
-            expect.assertions(1); // in case there are async issues the test will fail in ci
-            // Act
+        it("return null if there are no preKeys with deviceID param", async () => {
+            expect.assertions(1);
             const provider = new Database(options);
-            provider.on("ready", async () => {
-                const result = await provider.getPreKeys(deviceID);
-
-                // Assert
-                expect(result).toBeNull();
-                done();
+            await new Promise<void>((resolve, reject) => {
+                provider.once("ready", () => {
+                    void (async () => {
+                        try {
+                            const result = await provider.getPreKeys(deviceID);
+                            expect(result).toBeNull();
+                            await provider.close();
+                            resolve();
+                        } catch (e) {
+                            reject(e);
+                        }
+                    })();
+                });
             });
         });
     });

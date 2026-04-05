@@ -598,7 +598,7 @@ export class Database extends EventEmitter {
 
             return [user, null];
         } catch (err) {
-            return [null, err];
+            return [null, err instanceof Error ? err : new Error(String(err))];
         }
     }
 
