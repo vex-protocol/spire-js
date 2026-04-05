@@ -10,6 +10,19 @@ import winston from "winston";
 import { Database } from "../Database";
 import { ISpireOptions } from "../Spire";
 
+/** Winston logger stub — Database.close() calls `.info`, and `{}` breaks that. */
+function silentLogger(): winston.Logger {
+    const noop = jest.fn();
+    return ({
+        log: noop,
+        info: noop,
+        warn: noop,
+        error: noop,
+        debug: noop,
+        verbose: noop,
+    } as unknown) as winston.Logger;
+}
+
 describe("Database", () => {
     // Reusable test data
     const keyID = "de459e05-aa63-4dfa-97b4-ed43d5c7a5f7";
@@ -51,7 +64,7 @@ describe("Database", () => {
 
             const v4Spy = jest.spyOn(uuid, "v4").mockReturnValue(keyID);
             jest.spyOn(winston, "createLogger").mockReturnValueOnce(
-                ({} as unknown) as winston.Logger
+                silentLogger()
             );
 
             const provider = new Database(options);
