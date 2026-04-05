@@ -1,16 +1,16 @@
-import fs from "fs";
+import * as fs from "node:fs";
 
 import { XUtils } from "@vex-chat/crypto";
-import { XTypes } from "@vex-chat/types";
+import type { IDevice, IFilePayload } from "@vex-chat/types";
 import express from "express";
 import FileType from "file-type";
 import multer from "multer";
 import nacl from "tweetnacl";
 import winston from "winston";
 
-import { ALLOWED_IMAGE_TYPES, protect } from ".";
-import { Database } from "../Database";
-import { ICensoredUser } from "./utils";
+import { ALLOWED_IMAGE_TYPES, protect } from "./index.js";
+import { Database } from "../Database.js";
+import type { ICensoredUser } from "./utils.js";
 
 export const getAvatarRouter = (db: Database, log: winston.Logger) => {
     const router = express.Router();
@@ -37,9 +37,9 @@ export const getAvatarRouter = (db: Database, log: winston.Logger) => {
     });
 
     router.post("/:userID/json", protect, async (req, res) => {
-        const payload: XTypes.HTTP.IFilePayload = req.body;
+        const payload: IFilePayload = req.body;
         const userDetails: ICensoredUser = (req as any).user;
-        const deviceDetails: XTypes.SQL.IDevice | undefined = (req as any)
+        const deviceDetails: IDevice | undefined = (req as any)
             .device;
 
         if (!deviceDetails) {
@@ -82,7 +82,7 @@ export const getAvatarRouter = (db: Database, log: winston.Logger) => {
         multer().single("avatar"),
         async (req, res) => {
             const userDetails: ICensoredUser = (req as any).user;
-            const deviceDetails: XTypes.SQL.IDevice | undefined = (req as any)
+            const deviceDetails: IDevice | undefined = (req as any)
                 .device;
 
             if (!deviceDetails) {

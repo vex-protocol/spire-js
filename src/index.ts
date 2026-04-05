@@ -1,3 +1,3 @@
-import { Spire } from "./Spire";
+import { Spire } from "./Spire.js";
 
 export { Spire };
