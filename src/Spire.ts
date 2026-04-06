@@ -349,7 +349,8 @@ export class Spire extends EventEmitter {
                     const acceptHeader = req.get("accept")?.toLowerCase() || "";
                     const wantsJson =
                         acceptHeader.includes("application/json") &&
-                        !acceptHeader.includes("application/msgpack");
+                        !acceptHeader.includes("application/msgpack") &&
+                        !acceptHeader.includes("*/*");
 
                     if (wantsJson) {
                         return res.json(token);
