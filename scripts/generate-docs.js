@@ -216,23 +216,11 @@ const endpointOverrides = {
                                     type: "object",
                                     properties: {
                                         requestsTotal: { type: "integer" },
-                                        activeWebsocketClients: {
-                                            type: "integer",
-                                        },
                                     },
-                                    required: [
-                                        "requestsTotal",
-                                        "activeWebsocketClients",
-                                    ],
+                                    required: ["requestsTotal"],
                                 },
-                                dependencies: {
-                                    type: "object",
-                                    properties: {
-                                        dbReady: { type: "boolean" },
-                                        dbHealthy: { type: "boolean" },
-                                    },
-                                    required: ["dbReady", "dbHealthy"],
-                                },
+                                dbReady: { type: "boolean" },
+                                dbHealthy: { type: "boolean" },
                             },
                             required: [
                                 "ok",
@@ -245,7 +233,8 @@ const endpointOverrides = {
                                 "latencyBudgetMs",
                                 "withinLatencyBudget",
                                 "metrics",
-                                "dependencies",
+                                "dbReady",
+                                "dbHealthy",
                             ],
                         },
                     },

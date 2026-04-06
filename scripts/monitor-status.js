@@ -126,10 +126,15 @@ async function collectOnce(targetUrl) {
                     ? null
                     : payload.withinLatencyBudget,
             requestsTotal: payload?.metrics?.requestsTotal ?? null,
-            activeWebsocketClients:
-                payload?.metrics?.activeWebsocketClients ?? null,
-            dbReady: payload?.dependencies?.dbReady ?? null,
-            dbHealthy: payload?.dependencies?.dbHealthy ?? null,
+            activeWebsocketClients: null,
+            dbReady:
+                payload?.dbReady ??
+                payload?.dependencies?.dbReady ??
+                null,
+            dbHealthy:
+                payload?.dbHealthy ??
+                payload?.dependencies?.dbHealthy ??
+                null,
             errorText: null,
             rawJson: payload ? JSON.stringify(payload) : null,
         };
@@ -213,13 +218,9 @@ function formatLog(sample) {
     const status = sample.ok ? "UP" : "DOWN";
     const code = sample.httpStatus ?? "ERR";
     const latency = `${sample.requestLatencyMs}ms`;
-    const ws =
-        sample.activeWebsocketClients === null
-            ? "-"
-            : String(sample.activeWebsocketClients);
     const reqs = sample.requestsTotal === null ? "-" : String(sample.requestsTotal);
     const err = sample.errorText ? ` error="${sample.errorText}"` : "";
-    return `[${sample.sampledAt}] ${status} code=${code} latency=${latency} ws=${ws} reqs=${reqs}${err}`;
+    return `[${sample.sampledAt}] ${status} code=${code} latency=${latency} reqs=${reqs}${err}`;
 }
 
 function toPublicRow(row) {
@@ -242,7 +243,6 @@ function toPublicRow(row) {
                 ? null
                 : Boolean(row.within_latency_budget),
         requestsTotal: row.requests_total,
-        activeWebsocketClients: row.active_websocket_clients,
         dbReady: row.db_ready === null ? null : Boolean(row.db_ready),
         dbHealthy: row.db_healthy === null ? null : Boolean(row.db_healthy),
         errorText: row.error_text,
@@ -308,8 +308,7 @@ function getTimeseries(db, hours, limit) {
             sampled_at,
             ok,
             http_status,
-            request_latency_ms,
-            active_websocket_clients
+            request_latency_ms
         FROM status_samples
         WHERE sampled_at >= ?
         ORDER BY sampled_at ASC
@@ -324,7 +323,6 @@ function getTimeseries(db, hours, limit) {
         ok: Boolean(row.ok),
         httpStatus: row.http_status,
         requestLatencyMs: row.request_latency_ms,
-        activeWebsocketClients: row.active_websocket_clients,
     }));
 }
 

@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { execSync } from "node:child_process";
 import { Server } from "http";
 
 import { XUtils } from "@vex-chat/crypto";
@@ -58,6 +59,31 @@ const getAppVersion = (): string => {
     }
 };
 
+const getCommitSha = (): string => {
+    const envSha =
+        process.env.VERCEL_GIT_COMMIT_SHA ||
+        process.env.GIT_SHA ||
+        process.env.COMMIT_SHA ||
+        process.env.SOURCE_VERSION ||
+        process.env.RENDER_GIT_COMMIT;
+
+    if (envSha && envSha.trim() !== "") {
+        return envSha.trim();
+    }
+
+    try {
+        const sha = execSync("git rev-parse --short HEAD", {
+            cwd: process.cwd(),
+            stdio: ["ignore", "pipe", "ignore"],
+            encoding: "utf8",
+            timeout: 1500,
+        }).trim();
+        return sha || "unknown";
+    } catch {
+        return "unknown";
+    }
+};
+
 export interface ISpireOptions {
     logLevel?:
         | "error"
@@ -76,6 +102,7 @@ export class Spire extends EventEmitter {
     private clients: ClientManager[] = [];
     private readonly startedAt = new Date();
     private readonly version = getAppVersion();
+    private readonly commitSha = getCommitSha();
     private requestsTotal = 0;
     private dbReady = false;
 
@@ -371,12 +398,6 @@ export class Spire extends EventEmitter {
             const dbHealthy = this.dbReady ? await this.db.isHealthy() : false;
             const checkDurationMs = Date.now() - started;
 
-            const commitSha =
-                process.env.VERCEL_GIT_COMMIT_SHA ||
-                process.env.GIT_SHA ||
-                process.env.COMMIT_SHA ||
-                "unknown";
-
             const ok = dbHealthy;
             res.json({
                 ok,
@@ -384,19 +405,16 @@ export class Spire extends EventEmitter {
                 startedAt: this.startedAt.toISOString(),
                 now: new Date().toISOString(),
                 version: this.version,
-                commitSha,
+                commitSha: this.commitSha,
                 checkDurationMs,
                 latencyBudgetMs: STATUS_LATENCY_BUDGET_MS,
                 withinLatencyBudget:
                     checkDurationMs <= STATUS_LATENCY_BUDGET_MS,
                 metrics: {
                     requestsTotal: this.requestsTotal,
-                    activeWebsocketClients: this.clients.length,
                 },
-                dependencies: {
-                    dbReady: this.dbReady,
-                    dbHealthy,
-                },
+                dbReady: this.dbReady,
+                dbHealthy,
             });
         });
 
