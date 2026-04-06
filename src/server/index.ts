@@ -23,6 +23,7 @@ import nacl from "tweetnacl";
 import { getAvatarRouter } from "./avatar.ts";
 import { getFileRouter } from "./file.ts";
 import { getInviteRouter } from "./invite.ts";
+import { setupOpenApiDocs } from "./openapi.ts";
 import { getUserRouter } from "./user.ts";
 
 import * as uuid from "uuid";
@@ -780,6 +781,13 @@ export const initApp = (
     api.use("/avatar", avatarRouter);
 
     api.use("/invite", inviteRouter);
+
+    setupOpenApiDocs(api, [
+        { basePath: "/user", router: userRouter },
+        { basePath: "/file", router: fileRouter },
+        { basePath: "/avatar", router: avatarRouter },
+        { basePath: "/invite", router: inviteRouter },
+    ]);
 };
 
 /**

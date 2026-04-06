@@ -1,5 +1,4 @@
 {
     "$schema": "https://openapi.vercel.sh/vercel.json",
-    "buildCommand": "npx typedoc",
-    "outputDirectory": "docs"
+    "buildCommand": "npm run build"
 }
