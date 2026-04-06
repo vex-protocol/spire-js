@@ -331,6 +331,14 @@ export class Spire extends EventEmitter {
             );
         });
 
+        this.api.get("/status", (_req, res) => {
+            res.json({
+                ok: true,
+                uptimeSeconds: Math.floor(process.uptime()),
+                now: new Date().toISOString(),
+            });
+        });
+
         this.api.post("/goodbye", protect, async (req, res) => {
             const token = jwt.sign(
                 { user: censorUser((req as any).user) },
