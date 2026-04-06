@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import path from "node:path";
 
 const DEFAULT_URL = "https://api.vex.wtf/status";
-const DEFAULT_INTERVAL_MS = 10_000;
+const DEFAULT_INTERVAL_MS = 60_000;
 const DEFAULT_DB_PATH = "./monitoring/status-history.sqlite";
 const DEFAULT_API_PORT = 6767;
 const DEFAULT_API_HOST = "0.0.0.0";
@@ -322,7 +322,8 @@ function getTimeseriesBuckets(db, windowHours, bucketMinutes) {
         SELECT
             sampled_at,
             ok,
-            request_latency_ms
+            request_latency_ms,
+            requests_total
         FROM status_samples
         WHERE sampled_at >= ?
         ORDER BY sampled_at ASC
@@ -344,6 +345,8 @@ function getTimeseriesBuckets(db, windowHours, bucketMinutes) {
             upCount: 0,
             downCount: 0,
             latencies: [],
+            requestsTotalMin: null,
+            requestsTotalMax: null,
         });
     }
 
@@ -365,6 +368,19 @@ function getTimeseriesBuckets(db, windowHours, bucketMinutes) {
         }
         if (typeof row.request_latency_ms === "number") {
             bucket.latencies.push(row.request_latency_ms);
+        }
+        if (row.requests_total !== null && row.requests_total !== undefined) {
+            const rt = Number(row.requests_total);
+            if (Number.isFinite(rt)) {
+                bucket.requestsTotalMin =
+                    bucket.requestsTotalMin === null
+                        ? rt
+                        : Math.min(bucket.requestsTotalMin, rt);
+                bucket.requestsTotalMax =
+                    bucket.requestsTotalMax === null
+                        ? rt
+                        : Math.max(bucket.requestsTotalMax, rt);
+            }
         }
     }
 
@@ -391,12 +407,28 @@ function getTimeseriesBuckets(db, windowHours, bucketMinutes) {
             status = bucket.downCount === 0 ? "up" : "down";
         }
 
+        let serviceRequestsDelta = null;
+        if (
+            bucket.requestsTotalMin !== null &&
+            bucket.requestsTotalMax !== null &&
+            bucket.requestsTotalMax >= bucket.requestsTotalMin
+        ) {
+            serviceRequestsDelta =
+                bucket.requestsTotalMax - bucket.requestsTotalMin;
+        }
+
         return {
             bucketStart: new Date(bucket.bucketStartMs).toISOString(),
             bucketEnd: new Date(bucket.bucketEndMs).toISOString(),
             sampleCount: bucket.sampleCount,
             upCount: bucket.upCount,
             downCount: bucket.downCount,
+            requests: {
+                total: bucket.sampleCount,
+                online: bucket.upCount,
+                offline: bucket.downCount,
+            },
+            serviceRequestsDelta,
             uptimePercent: roundOneDecimal(uptimePercent),
             avgLatencyMs,
             p95LatencyMs,
