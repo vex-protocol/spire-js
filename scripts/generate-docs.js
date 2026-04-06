@@ -6,6 +6,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 
 const routeSources = [
+    { file: "src/Spire.ts", prefix: "" },
     { file: "src/server/index.ts", prefix: "" },
     { file: "src/server/user.ts", prefix: "/user" },
     { file: "src/server/file.ts", prefix: "/file" },
@@ -14,7 +15,7 @@ const routeSources = [
 ];
 
 const routeRegex =
-    /\b(?:api|router)\.(get|post|put|patch|delete)\(\s*["'`]([^"'`]+)["'`]/g;
+    /\b(?:api|router|this\.api)\.(get|post|put|patch|delete)\(\s*["'`]([^"'`]+)["'`]/g;
 
 const normalizePath = (prefix, routePath) => {
     const combined = `${prefix}/${routePath}`.replace(/\/+/g, "/");
