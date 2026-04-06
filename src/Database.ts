@@ -663,6 +663,16 @@ export class Database extends EventEmitter {
             });
     }
 
+    public async isHealthy(): Promise<boolean> {
+        try {
+            await this.db.raw("select 1 as ok");
+            return true;
+        } catch (err) {
+            this.log.warn("Database health check failed: " + err);
+            return false;
+        }
+    }
+
     public async close(): Promise<void> {
         this.log.info("Closing database.");
         await this.db.destroy();
