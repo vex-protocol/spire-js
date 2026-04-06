@@ -31,6 +31,7 @@ import { createLogger } from "./utils/createLogger.ts";
 // expiry of regkeys = 24hr
 export const TOKEN_EXPIRY = 1000 * 60 * 10;
 export const JWT_EXPIRY = "7d";
+const STATUS_LATENCY_BUDGET_MS = 250;
 
 // 3-19 chars long
 const usernameRegex = /^(\w{3,19})$/;
@@ -41,6 +42,18 @@ for (const dir of directories) {
         fs.mkdirSync(dir);
     }
 }
+
+const getAppVersion = (): string => {
+    try {
+        const raw = fs.readFileSync(new URL("../package.json", import.meta.url), {
+            encoding: "utf8",
+        });
+        const pkg = JSON.parse(raw) as { version?: string };
+        return pkg.version || "unknown";
+    } catch {
+        return "unknown";
+    }
+};
 
 export interface ISpireOptions {
     logLevel?:
@@ -58,6 +71,10 @@ export interface ISpireOptions {
 export class Spire extends EventEmitter {
     private db: Database;
     private clients: ClientManager[] = [];
+    private readonly startedAt = new Date();
+    private readonly version = getAppVersion();
+    private requestsTotal = 0;
+    private dbReady = false;
 
     private expWs: expressWs.Instance = expressWs(express());
     private api = this.expWs.app;
@@ -76,6 +93,9 @@ export class Spire extends EventEmitter {
         this.signKeys = nacl.sign.keyPair.fromSecretKey(XUtils.decodeHex(SK));
 
         this.db = new Database(options);
+        this.db.on("ready", () => {
+            this.dbReady = true;
+        });
 
         this.log = createLogger("spire", options?.logLevel || "error");
         this.init(options?.apiPort || 16777);
@@ -175,6 +195,11 @@ export class Spire extends EventEmitter {
     }
 
     private init(apiPort: number): void {
+        this.api.use((_req, _res, next) => {
+            this.requestsTotal += 1;
+            next();
+        });
+
         // initialize the expression app configuration with loose routes/handlers
         initApp(
             this.api,
@@ -331,11 +356,44 @@ export class Spire extends EventEmitter {
             );
         });
 
-        this.api.get("/status", (_req, res) => {
+        this.api.get("/healthz", (_req, res) => {
+            if (!this.dbReady) {
+                res.status(503).json({ ok: false, dbReady: false });
+                return;
+            }
+            res.json({ ok: true, dbReady: true });
+        });
+
+        this.api.get("/status", async (_req, res) => {
+            const started = Date.now();
+            const dbHealthy = this.dbReady ? await this.db.isHealthy() : false;
+            const checkDurationMs = Date.now() - started;
+
+            const commitSha =
+                process.env.VERCEL_GIT_COMMIT_SHA ||
+                process.env.GIT_SHA ||
+                process.env.COMMIT_SHA ||
+                "unknown";
+
+            const ok = dbHealthy;
             res.json({
-                ok: true,
+                ok,
                 uptimeSeconds: Math.floor(process.uptime()),
+                startedAt: this.startedAt.toISOString(),
                 now: new Date().toISOString(),
+                version: this.version,
+                commitSha,
+                checkDurationMs,
+                latencyBudgetMs: STATUS_LATENCY_BUDGET_MS,
+                withinLatencyBudget: checkDurationMs <= STATUS_LATENCY_BUDGET_MS,
+                metrics: {
+                    requestsTotal: this.requestsTotal,
+                    activeWebsocketClients: this.clients.length,
+                },
+                dependencies: {
+                    dbReady: this.dbReady,
+                    dbHealthy,
+                },
             });
         });
 

@@ -154,6 +154,105 @@ const endpointOverrides = {
             },
         },
     },
+    "get /healthz": {
+        summary: "Liveness and readiness probe",
+        description:
+            "Lightweight probe endpoint for uptime checks. Returns 200 when database initialization has completed, otherwise 503 while booting.",
+        responses: {
+            200: {
+                description: "Service is healthy enough to receive traffic.",
+                content: {
+                    "application/json": {
+                        schema: {
+                            type: "object",
+                            properties: {
+                                ok: { type: "boolean" },
+                                dbReady: { type: "boolean" },
+                            },
+                            required: ["ok", "dbReady"],
+                        },
+                    },
+                },
+            },
+            503: {
+                description: "Service is alive but not ready yet.",
+                content: {
+                    "application/json": {
+                        schema: {
+                            type: "object",
+                            properties: {
+                                ok: { type: "boolean" },
+                                dbReady: { type: "boolean" },
+                            },
+                            required: ["ok", "dbReady"],
+                        },
+                    },
+                },
+            },
+        },
+    },
+    "get /status": {
+        summary: "Detailed runtime status",
+        description:
+            "Operational status endpoint including uptime, build metadata, health-check timing, and basic runtime counters.",
+        responses: {
+            200: {
+                description: "Detailed status payload.",
+                content: {
+                    "application/json": {
+                        schema: {
+                            type: "object",
+                            properties: {
+                                ok: { type: "boolean" },
+                                uptimeSeconds: { type: "integer" },
+                                startedAt: { type: "string", format: "date-time" },
+                                now: { type: "string", format: "date-time" },
+                                version: { type: "string" },
+                                commitSha: { type: "string" },
+                                checkDurationMs: { type: "integer" },
+                                latencyBudgetMs: { type: "integer" },
+                                withinLatencyBudget: { type: "boolean" },
+                                metrics: {
+                                    type: "object",
+                                    properties: {
+                                        requestsTotal: { type: "integer" },
+                                        activeWebsocketClients: {
+                                            type: "integer",
+                                        },
+                                    },
+                                    required: [
+                                        "requestsTotal",
+                                        "activeWebsocketClients",
+                                    ],
+                                },
+                                dependencies: {
+                                    type: "object",
+                                    properties: {
+                                        dbReady: { type: "boolean" },
+                                        dbHealthy: { type: "boolean" },
+                                    },
+                                    required: ["dbReady", "dbHealthy"],
+                                },
+                            },
+                            required: [
+                                "ok",
+                                "uptimeSeconds",
+                                "startedAt",
+                                "now",
+                                "version",
+                                "commitSha",
+                                "checkDurationMs",
+                                "latencyBudgetMs",
+                                "withinLatencyBudget",
+                                "metrics",
+                                "dependencies",
+                            ],
+                        },
+                    },
+                },
+            },
+        },
+    },
 };
 
 const paths = {};
