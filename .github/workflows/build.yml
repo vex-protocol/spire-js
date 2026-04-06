@@ -33,3 +33,23 @@ jobs:
 
       - name: Test
         run: npm test
+
+  deploy-hook:
+    name: Trigger deploy hook
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST deploy endpoint
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.DEPLOY_HOOK_URL }}
+          DEPLOY_HOOK_SECRET: ${{ secrets.DEPLOY_HOOK_SECRET }}
+        run: |
+          if [ -z "$DEPLOY_HOOK_URL" ] || [ -z "$DEPLOY_HOOK_SECRET" ]; then
+            echo "DEPLOY_HOOK_URL and/or DEPLOY_HOOK_SECRET not set; skipping deploy hook."
+            exit 0
+          fi
+          curl -fsS -X POST "$DEPLOY_HOOK_URL" \
+            -H "Authorization: Bearer ${DEPLOY_HOOK_SECRET}" \
+            -H "Content-Type: application/json" \
+            --data '{}'

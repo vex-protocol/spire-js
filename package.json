@@ -18,7 +18,10 @@
         "test": "vitest run",
         "gen-spk": "node scripts/gen-spk.js",
         "docs": "node ./scripts/generate-docs.js",
-        "monitor": "node ./scripts/monitor-status.js"
+        "service:status-monitor": "node ./services/status-monitor/index.js",
+        "service:status-monitor:clear-history": "node ./services/status-monitor/clear-history.js",
+        "service:deploy-hook": "node ./services/deploy-hook/index.js",
+        "monitor": "node ./services/status-monitor/index.js"
     },
     "devDependencies": {
         "@types/better-sqlite3": "^7.6.0",
