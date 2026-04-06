@@ -1,8 +1,9 @@
-import fs from "fs";
+import * as fs from "node:fs";
 import { Server } from "http";
 
 import { XUtils } from "@vex-chat/crypto";
-import { XTypes } from "@vex-chat/types";
+import type { IActionToken, IBaseMsg, IDevice, IMailWS, INotifyMsg, IRegistrationPayload } from "@vex-chat/types";
+import { TokenScopes } from "@vex-chat/types";
 import { EventEmitter } from "events";
 import express from "express";
 import expressWs from "express-ws";
@@ -10,15 +11,15 @@ import expressWs from "express-ws";
 import nacl from "tweetnacl";
 import * as uuid from "uuid";
 import winston from "winston";
-import WebSocket from "ws";
+import { WebSocketServer } from "ws";
 
 import jwt from "jsonwebtoken";
-import msgpack from "msgpack-lite";
-import { ClientManager } from "./ClientManager";
-import { Database, hashPassword } from "./Database";
-import { initApp, protect } from "./server";
-import { censorUser, ICensoredUser } from "./server/utils";
-import { createLogger } from "./utils/createLogger";
+import { msgpack } from "./utils/msgpack.ts";
+import { ClientManager } from "./ClientManager.ts";
+import { Database, hashPassword } from "./Database.ts";
+import { initApp, protect } from "./server/index.ts";
+import { censorUser, type ICensoredUser } from "./server/utils.ts";
+import { createLogger } from "./utils/createLogger.ts";
 
 // expiry of regkeys = 24hr
 export const TOKEN_EXPIRY = 1000 * 60 * 10;
@@ -34,7 +35,6 @@ for (const dir of directories) {
     }
 }
 
-const TokenScopes = XTypes.HTTP.TokenScopes;
 
 export interface ISpireOptions {
     logLevel?:
@@ -55,11 +55,11 @@ export class Spire extends EventEmitter {
 
     private expWs: expressWs.Instance = expressWs(express());
     private api = this.expWs.app;
-    private wss: WebSocket.Server = this.expWs.getWss();
+    private wss: WebSocketServer = this.expWs.getWss();
 
     private signKeys: nacl.SignKeyPair;
 
-    private actionTokens: XTypes.HTTP.IActionToken[] = [];
+    private actionTokens: IActionToken[] = [];
 
     private log: winston.Logger;
     private server: Server | null = null;
@@ -106,7 +106,7 @@ export class Spire extends EventEmitter {
         for (const client of this.clients) {
             if (deviceID) {
                 if (client.getDevice().deviceID === deviceID) {
-                    const msg: XTypes.WS.INotifyMsg = {
+                    const msg: INotifyMsg = {
                         transmissionID,
                         type: "notify",
                         event,
@@ -116,7 +116,7 @@ export class Spire extends EventEmitter {
                 }
             } else {
                 if (client.getUser().userID === userID) {
-                    const msg: XTypes.WS.INotifyMsg = {
+                    const msg: INotifyMsg = {
                         transmissionID,
                         type: "notify",
                         event,
@@ -129,9 +129,9 @@ export class Spire extends EventEmitter {
     }
 
     private createActionToken(
-        scope: XTypes.HTTP.TokenScopes
-    ): XTypes.HTTP.IActionToken {
-        const token: XTypes.HTTP.IActionToken = {
+        scope: TokenScopes
+    ): IActionToken {
+        const token: IActionToken = {
             key: uuid.v4(),
             time: new Date(Date.now()),
             scope,
@@ -140,7 +140,7 @@ export class Spire extends EventEmitter {
         return token;
     }
 
-    private deleteActionToken(key: XTypes.HTTP.IActionToken) {
+    private deleteActionToken(key: IActionToken) {
         if (this.actionTokens.includes(key)) {
             this.actionTokens.splice(this.actionTokens.indexOf(key), 1);
         }
@@ -148,7 +148,7 @@ export class Spire extends EventEmitter {
 
     private validateToken(
         key: string,
-        scope: XTypes.HTTP.TokenScopes
+        scope: TokenScopes
     ): boolean {
         this.log.info("Validating token: " + key);
         for (const rKey of this.actionTokens) {
@@ -189,7 +189,7 @@ export class Spire extends EventEmitter {
             const userDetails: ICensoredUser = (req as any).user;
             if (!userDetails) {
                 this.log.warn("User attempted to open socket with no jwt.");
-                const err: XTypes.WS.IBaseMsg = {
+                const err: IBaseMsg = {
                     type: "unauthorized",
                     transmissionID: uuid.v4(),
                 };
@@ -331,7 +331,7 @@ export class Spire extends EventEmitter {
 
         this.api.post("/mail", protect, async (req, res) => {
             const senderDeviceDetails:
-                | XTypes.SQL.IDevice
+                | IDevice
                 | undefined = (req as any).device;
             if (!senderDeviceDetails) {
                 res.sendStatus(401);
@@ -342,7 +342,7 @@ export class Spire extends EventEmitter {
             const {
                 header,
                 mail,
-            }: { header: Uint8Array; mail: XTypes.WS.IMail } = req.body;
+            }: { header: Uint8Array; mail: IMailWS } = req.body;
 
             try {
                 await this.db.saveMail(
@@ -434,7 +434,7 @@ export class Spire extends EventEmitter {
 
         this.api.post("/register", async (req, res) => {
             try {
-                const regPayload: XTypes.HTTP.IRegistrationPayload = req.body;
+                const regPayload: IRegistrationPayload = req.body;
                 if (!usernameRegex.test(regPayload.username)) {
                     res.status(400).send({
                         error:

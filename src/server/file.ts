@@ -1,17 +1,16 @@
-import fs from "fs";
-import path from "path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 import { XUtils } from "@vex-chat/crypto";
-import { XTypes } from "@vex-chat/types";
+import type { IDevice, IFilePayload, IFileSQL } from "@vex-chat/types";
 import express from "express";
 import multer from "multer";
-import nacl from "tweetnacl";
 import { v4 } from "uuid";
 import winston from "winston";
 
-import msgpack from "msgpack-lite";
-import { protect } from ".";
-import { Database } from "../Database";
+import { msgpack } from "../utils/msgpack.ts";
+import { protect } from "./index.ts";
+import { Database } from "../Database.ts";
 
 export const getFileRouter = (db: Database, log: winston.Logger) => {
     const router = express.Router();
@@ -53,9 +52,9 @@ export const getFileRouter = (db: Database, log: winston.Logger) => {
     });
 
     router.post("/json", protect, async (req, res) => {
-        const deviceDetails: XTypes.SQL.IDevice | undefined = (req as any)
+        const deviceDetails: IDevice | undefined = (req as any)
             .device;
-        const payload: XTypes.HTTP.IFilePayload = req.body;
+        const payload: IFilePayload = req.body;
 
         if (!deviceDetails) {
             res.sendStatus(401);
@@ -74,7 +73,7 @@ export const getFileRouter = (db: Database, log: winston.Logger) => {
 
         const buf = Buffer.from(XUtils.decodeBase64(payload.file));
 
-        const newFile: XTypes.SQL.IFile = {
+        const newFile: IFileSQL = {
             fileID: v4(),
             owner: payload.owner,
             nonce: payload.nonce,
@@ -90,9 +89,9 @@ export const getFileRouter = (db: Database, log: winston.Logger) => {
     });
 
     router.post("/", protect, multer().single("file"), async (req, res) => {
-        const deviceDetails: XTypes.SQL.IDevice | undefined = (req as any)
+        const deviceDetails: IDevice | undefined = (req as any)
             .device;
-        const payload: XTypes.HTTP.IFilePayload = req.body;
+        const payload: IFilePayload = req.body;
 
         if (!deviceDetails) {
             res.sendStatus(400);
@@ -109,7 +108,7 @@ export const getFileRouter = (db: Database, log: winston.Logger) => {
             return;
         }
 
-        const newFile: XTypes.SQL.IFile = {
+        const newFile: IFileSQL = {
             fileID: v4(),
             owner: payload.owner,
             nonce: payload.nonce,

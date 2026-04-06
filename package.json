@@ -1,86 +1,68 @@
 {
     "name": "@vex-chat/spire",
-    "version": "0.8.0",
+    "version": "0.9.0-rc.0",
     "description": "Vex server implementation in NodeJS.",
-    "main": "./dist/index.js",
+    "private": true,
+    "type": "module",
     "author": "Extra <extrahash@protonmail.com>",
     "license": "AGPL-3.0-or-later",
     "engines": {
         "node": ">=24.0.0"
     },
     "scripts": {
-        "start": "node ./dist/run.js",
+        "start": "node src/run.ts",
+        "start:built": "node ./dist/run.js",
         "restart": "pm2 restart spire && pm2 logs spire",
-        "build": "node ./node_modules/typescript/bin/tsc",
-        "prettier": "node ./node_modules/prettier/bin-prettier.js '**/*.{ts,tsx,json,md}' --tab-width 4 --trailing-comma es5 --ignore-path .gitignore  --arrow-parens always --write",
-        "lint": "tslint -p tsconfig.json",
-        "lint-fix": "tslint -p tsconfig.json --fix",
-        "api-knex": "TS_NODE_COMPILER_OPTIONS='{ \"module\": \"commonjs\" }' knex --knexfile=./src/knexfile.ts",
-        "test": "jest",
-        "gen-spk": "node scripts/gen-spk.js",
-        "prepublish": "yarn build"
+        "build": "tsc",
+        "prettier": "prettier '**/*.{ts,tsx,json,md}' --tab-width 4 --trailing-comma es5 --ignore-path .gitignore --arrow-parens always --write",
+        "test": "vitest run",
+        "gen-spk": "node scripts/gen-spk.js"
     },
     "devDependencies": {
-        "@types/atob": "^2.1.2",
+        "@types/better-sqlite3": "^7.6.0",
         "@types/cookie-parser": "^1.4.2",
-        "@types/cors": "^2.8.8",
-        "@types/express": "^4.17.9",
-        "@types/express-ws": "^3.0.0",
-        "@types/jsonwebtoken": "^8.5.0",
-        "@types/morgan": "^1.9.2",
-        "@types/msgpack-lite": "^0.1.7",
-        "@types/multer": "^1.4.5",
-        "@types/parse-duration": "^0.3.0",
-        "@types/uuid": "^8.3.0",
-        "@types/ws": "^7.4.0",
-        "husky": "^3.1.0",
-        "@types/jest": "^29.5.14",
-        "jest": "^29.7.0",
-        "lint-staged": "^9.5.0",
-        "prettier": "^1.19.1",
-        "ts-jest": "^29.2.5",
-        "ts-node": "^9.1.1",
-        "tslint": "^5.20.1",
-        "tslint-config-prettier": "^1.18.0",
-        "typescript": "^5.9.0"
+        "@types/cors": "^2.8.17",
+        "@types/express": "^4.17.21",
+        "@types/express-ws": "^3.0.5",
+        "@types/jsonwebtoken": "^9.0.0",
+        "@types/morgan": "^1.9.9",
+        "@types/multer": "^1.4.12",
+        "@types/node": "^24.12.2",
+        "@types/uuid": "^10.0.0",
+        "@types/ws": "^8.5.10",
+        "@vex-chat/crypto": "1.1.0-rc.1",
+        "@vex-chat/types": "^1.0.0-rc.1",
+        "prettier": "^3.2.0",
+        "typescript": "^6.0.2",
+        "vitest": "^3.0.0"
     },
-    "lint-staged": {
-        "src/**/*.{ts}": [
-            "tslint -c tslint.json --fix",
-            "git add"
-        ]
-    },
-    "husky": {
-        "hooks": {
-            "pre-commit": "yarn prettier; git add --all; lint-staged",
-            "pre-push": "git diff HEAD --quiet && npm test"
-        }
+    "overrides": {
+        "@types/express": "^4.17.21",
+        "@types/express-serve-static-core": "^4.17.41",
+        "@types/ws": "^8.5.10",
+        "@types/readable-stream": "4.0.11"
     },
     "dependencies": {
         "@extrahash/sleep": "^1.0.0",
-        "@vex-chat/crypto": "1.0.11-rc.11",
-        "@vex-chat/types": "^0.10.18",
-        "atob": "^2.1.2",
+        "msgpackr": "1.11.8",
+        "better-sqlite3": "^11.0.0",
         "chalk": "^4.1.0",
         "cookie-parser": "^1.4.5",
         "cors": "^2.8.5",
-        "dotenv": "^8.2.0",
+        "dotenv": "^17.0.0",
         "express": "^4.17.1",
         "express-ws": "^4.0.0",
-        "file-type": "^16.1.0",
+        "file-type": "^22.0.0",
         "helmet": "^4.2.0",
-        "jsonwebtoken": "^8.5.1",
-        "knex": "^0.21.12",
+        "jsonwebtoken": "^9.0.2",
+        "knex": "^3.1.0",
         "morgan": "^1.10.0",
-        "msgpack-lite": "^0.1.26",
-        "multer": "^1.4.2",
+        "multer": "^2.0.0",
         "mysql": "^2.18.1",
-        "parse-duration": "^0.4.4",
-        "pbkdf2": "^3.1.1",
-        "sqlite3": "^5.1.7",
+        "parse-duration": "^2.0.0",
         "tweetnacl": "^1.0.3",
         "uuid": "^8.3.1",
         "winston": "^3.3.3",
-        "ws": "^7.4.0"
+        "ws": "^8.17.0"
     }
 }

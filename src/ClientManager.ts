@@ -1,9 +1,10 @@
 import { sleep } from "@extrahash/sleep";
 import { xConcat, XUtils } from "@vex-chat/crypto";
-import { XTypes } from "@vex-chat/types";
+import type { IBaseMsg, IChallMsg, IDevice, IErrMsg, IMailWS, IReceiptMsg, IResourceMsg, IRespMsg, ISucessMsg, IUser } from "@vex-chat/types";
+import { SocketAuthErrors } from "@vex-chat/types";
 import chalk from "chalk";
 import { EventEmitter } from "events";
-import msgpack from "msgpack-lite";
+import { msgpack } from "./utils/msgpack.ts";
 import nacl from "tweetnacl";
 import {
     parse as uuidParse,
@@ -13,11 +14,11 @@ import {
 import winston from "winston";
 import WebSocket from "ws";
 
-import { Database } from "./Database";
-import { ICensoredUser } from "./server/utils";
-import { ISpireOptions, TOKEN_EXPIRY } from "./Spire";
-import { createLogger } from "./utils/createLogger";
-import { createUint8UUID } from "./utils/createUint8UUID";
+import { Database } from "./Database.ts";
+import type { ICensoredUser } from "./server/utils.ts";
+import { TOKEN_EXPIRY, type ISpireOptions } from "./Spire.ts";
+import { createLogger } from "./utils/createLogger.ts";
+import { createUint8UUID } from "./utils/createUint8UUID.ts";
 
 export const POWER_LEVELS = {
     INVITE: 25,
@@ -32,11 +33,11 @@ function emptyHeader() {
 
 const MAX_MSG_SIZE = 2048;
 
-function unpackMessage(msg: Buffer): [Uint8Array, XTypes.WS.IBaseMsg] {
+function unpackMessage(msg: Buffer): [Uint8Array, IBaseMsg] {
     const msgp = Uint8Array.from(msg);
 
     const msgh = msgp.slice(0, 32);
-    const msgb = msgpack.decode(msgp.slice(32));
+    const msgb: IBaseMsg = msgpack.decode(msgp.slice(32));
 
     return [msgh, msgb];
 }
@@ -54,9 +55,9 @@ export class ClientManager extends EventEmitter {
     private challengeID: Uint8Array = createUint8UUID();
     private failed: boolean = false;
     private db: Database;
-    private user: XTypes.SQL.IUser | null;
+    private user: IUser | null;
     private userDetails: ICensoredUser;
-    private device: XTypes.SQL.IDevice | null;
+    private device: IDevice | null;
     private log: winston.Logger;
     private notify: (
         userID: string,
@@ -93,7 +94,7 @@ export class ClientManager extends EventEmitter {
         return this.user.username + "<" + this.getDevice().deviceID + ">";
     }
 
-    public getUser(): XTypes.SQL.IUser {
+    public getUser(): IUser {
         if (!this.authed) {
             throw new Error("You must be authed before getting user info.");
         }
@@ -127,7 +128,7 @@ export class ClientManager extends EventEmitter {
         }
     }
 
-    public getDevice(): XTypes.SQL.IDevice {
+    public getDevice(): IDevice {
         return this.device!;
     }
 
@@ -181,7 +182,7 @@ export class ClientManager extends EventEmitter {
         this.send(p);
     }
 
-    private async verifyResponse(msg: XTypes.WS.IRespMsg) {
+    private async verifyResponse(msg: IRespMsg) {
         const user = await this.db.retrieveUser(this.userDetails.userID);
         if (user) {
             const devices = await this.db.retrieveUserDeviceList([user.userID]);
@@ -198,26 +199,26 @@ export class ClientManager extends EventEmitter {
             }
             if (!message) {
                 this.log.warn("Signature verification failed!");
-                this.sendAuthError(XTypes.WS.SocketAuthErrors.BadSignature);
+                this.sendAuthError(SocketAuthErrors.BadSignature);
                 this.fail();
                 return;
             }
 
             if (
                 XUtils.bytesEqual(
-                    (this.challengeID as unknown) as ArrayBufferLike,
-                    (message as unknown) as ArrayBufferLike
+                    this.challengeID as Uint8Array,
+                    message as Uint8Array
                 )
             ) {
                 this.user = user;
                 this.authorize(msg.transmissionID);
             } else {
                 this.log.warn("Token is bad!");
-                this.sendAuthError(XTypes.WS.SocketAuthErrors.InvalidToken);
+                this.sendAuthError(SocketAuthErrors.InvalidToken);
             }
         } else {
             this.log.info("User is not registered.");
-            this.sendAuthError(XTypes.WS.SocketAuthErrors.UserNotRegistered);
+            this.sendAuthError(SocketAuthErrors.UserNotRegistered);
 
             this.fail();
         }
@@ -225,7 +226,7 @@ export class ClientManager extends EventEmitter {
 
     private challenge() {
         this.challengeID = new Uint8Array(uuidParse(uuidv4()));
-        const challenge: XTypes.WS.IChallMsg = {
+        const challenge: IChallMsg = {
             transmissionID: uuidv4(),
             type: "challenge",
             challenge: this.challengeID,
@@ -234,7 +235,7 @@ export class ClientManager extends EventEmitter {
     }
 
     private sendErr(transmissionID: string, message: string, data?: any) {
-        const error: XTypes.WS.IErrMsg = {
+        const error: IErrMsg = {
             transmissionID,
             type: "error",
             error: message,
@@ -243,7 +244,7 @@ export class ClientManager extends EventEmitter {
         this.send(error);
     }
 
-    private sendAuthError(error: XTypes.WS.SocketAuthErrors) {
+    private sendAuthError(error: SocketAuthErrors) {
         this.send({ type: "authErr", error });
     }
 
@@ -257,7 +258,7 @@ export class ClientManager extends EventEmitter {
         header?: Uint8Array,
         timestamp?: string
     ) {
-        const msg: XTypes.WS.ISucessMsg = {
+        const msg: ISucessMsg = {
             transmissionID,
             type: "success",
             data,
@@ -267,13 +268,13 @@ export class ClientManager extends EventEmitter {
     }
 
     private async parseResourceMsg(
-        msg: XTypes.WS.IResourceMsg,
+        msg: IResourceMsg,
         header: Uint8Array
     ) {
         switch (msg.resourceType) {
             case "mail":
                 if (msg.action === "CREATE") {
-                    const mail: XTypes.WS.IMail = msg.data;
+                    const mail: IMailWS = msg.data;
 
                     try {
                         await this.db.saveMail(
@@ -316,7 +317,7 @@ export class ClientManager extends EventEmitter {
         }
     }
 
-    private async handleReceipt(msg: XTypes.WS.IReceiptMsg) {
+    private async handleReceipt(msg: IReceiptMsg) {
         await this.db.deleteMail(msg.nonce, this.getDevice().deviceID);
     }
 
@@ -351,11 +352,11 @@ export class ClientManager extends EventEmitter {
                 chalk.bold("⟵   ") +
                     (msg.type === "resource"
                         ? crudColor(
-                              (msg as XTypes.WS.IResourceMsg).action.toUpperCase()
+                              (msg as IResourceMsg).action.toUpperCase()
                           ) +
                           " " +
                           chalk.bold(
-                              (msg as XTypes.WS.IResourceMsg).resourceType.toUpperCase()
+                              (msg as IResourceMsg).resourceType.toUpperCase()
                           )
                         : chalk.bold(msg.type.toUpperCase())) +
                     " " +
@@ -381,7 +382,7 @@ export class ClientManager extends EventEmitter {
 
             switch (msg.type) {
                 case "receipt":
-                    this.handleReceipt(msg as XTypes.WS.IReceiptMsg);
+                    this.handleReceipt(msg as IReceiptMsg);
                     break;
                 case "resource":
                     if (!this.authed) {
@@ -392,12 +393,12 @@ export class ClientManager extends EventEmitter {
                         break;
                     }
                     this.parseResourceMsg(
-                        msg as XTypes.WS.IResourceMsg,
+                        msg as IResourceMsg,
                         header
                     );
                     break;
                 case "response":
-                    this.verifyResponse(msg as XTypes.WS.IRespMsg);
+                    this.verifyResponse(msg as IRespMsg);
                     break;
                 case "ping":
                     this.pong(msg.transmissionID);
