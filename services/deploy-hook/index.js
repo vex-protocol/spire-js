@@ -10,6 +10,7 @@ const DEFAULT_PORT = 6868;
 const DEFAULT_HOST = "0.0.0.0";
 const DEFAULT_GIT_REF = "master";
 const DEFAULT_PM2_APP = "spire";
+const DEFAULT_LOG_CHARS_PER_STREAM = 65_536;
 
 function envString(name, fallback) {
     const v = process.env[name];
@@ -56,6 +57,17 @@ function getProvidedSecret(req) {
     return null;
 }
 
+function clipStream(text, maxChars) {
+    if (maxChars <= 0 || text.length <= maxChars) {
+        return { text, truncated: false };
+    }
+    const omitted = text.length - maxChars;
+    return {
+        text: `… (${omitted} chars omitted from start)\n${text.slice(-maxChars)}`,
+        truncated: true,
+    };
+}
+
 function run(cmd, args, cwd) {
     return new Promise((resolve, reject) => {
         const child = spawn(cmd, args, {
@@ -77,35 +89,94 @@ function run(cmd, args, cwd) {
                 resolve({ stdout, stderr });
             } else {
                 const tail = (stderr || stdout).slice(-4000);
-                reject(
-                    new Error(
-                        `${cmd} ${args.join(" ")} exited with code ${code}: ${tail}`,
-                    ),
+                const err = new Error(
+                    `${cmd} ${args.join(" ")} exited with code ${code}: ${tail}`,
                 );
+                err.stdout = stdout;
+                err.stderr = stderr;
+                err.exitCode = code;
+                reject(err);
             }
         });
     });
 }
 
 async function runDeploy({ repoRoot, gitRef, pm2App }) {
-    const steps = [];
+    const stepLogs = [];
+    const maxStream = envInt(
+        "DEPLOY_HOOK_LOG_CHARS_PER_STREAM",
+        DEFAULT_LOG_CHARS_PER_STREAM,
+    );
 
-    await run("git", ["fetch", "origin"], repoRoot);
-    steps.push("git fetch origin");
+    function appendResponseLog(command, stdout, stderr) {
+        const co = clipStream(stdout, maxStream);
+        const ce = clipStream(stderr, maxStream);
+        stepLogs.push({
+            command,
+            stdout: co.text,
+            stderr: ce.text,
+            truncated: co.truncated || ce.truncated,
+        });
+    }
 
-    await run("git", ["checkout", gitRef], repoRoot);
-    steps.push(`git checkout ${gitRef}`);
+    async function step(cmd, args) {
+        const command = `${cmd} ${args.join(" ")}`;
+        console.log(`[deploy-hook] --- ${command} ---`);
+        let stdout = "";
+        let stderr = "";
+        try {
+            const out = await run(cmd, args, repoRoot);
+            stdout = out.stdout;
+            stderr = out.stderr;
+        } catch (e) {
+            if (e && typeof e === "object") {
+                if ("stdout" in e && typeof e.stdout === "string") {
+                    stdout = e.stdout;
+                }
+                if ("stderr" in e && typeof e.stderr === "string") {
+                    stderr = e.stderr;
+                }
+            }
+            if (stdout) {
+                process.stdout.write(
+                    stdout.endsWith("\n") ? stdout : `${stdout}\n`,
+                );
+            }
+            if (stderr) {
+                process.stderr.write(
+                    stderr.endsWith("\n") ? stderr : `${stderr}\n`,
+                );
+            }
+            appendResponseLog(command, stdout, stderr);
+            if (e instanceof Error) {
+                e.stepLogs = stepLogs;
+                throw e;
+            }
+            const wrapped = new Error(String(e));
+            wrapped.stepLogs = stepLogs;
+            throw wrapped;
+        }
+        if (stdout) {
+            process.stdout.write(
+                stdout.endsWith("\n") ? stdout : `${stdout}\n`,
+            );
+        }
+        if (stderr) {
+            process.stderr.write(
+                stderr.endsWith("\n") ? stderr : `${stderr}\n`,
+            );
+        }
+        appendResponseLog(command, stdout, stderr);
+    }
 
-    await run("git", ["pull", "--ff-only", "origin", gitRef], repoRoot);
-    steps.push(`git pull --ff-only origin ${gitRef}`);
+    await step("git", ["fetch", "origin"]);
+    await step("git", ["checkout", gitRef]);
+    await step("git", ["pull", "--ff-only", "origin", gitRef]);
+    await step("npm", ["install"]);
+    await step("pm2", ["restart", pm2App]);
 
-    await run("npm", ["install"], repoRoot);
-    steps.push("npm install");
-
-    await run("pm2", ["restart", pm2App], repoRoot);
-    steps.push(`pm2 restart ${pm2App}`);
-
-    return steps;
+    const steps = stepLogs.map((s) => s.command);
+    return { steps, stepLogs };
 }
 
 function sendJson(res, status, body) {
@@ -178,13 +249,30 @@ async function main() {
 
             busy = true;
             let steps;
+            let stepLogs;
             try {
-                steps = await runDeploy({ repoRoot, gitRef, pm2App });
+                ({ steps, stepLogs } = await runDeploy({
+                    repoRoot,
+                    gitRef,
+                    pm2App,
+                }));
             } catch (err) {
                 const message =
                     err instanceof Error ? err.message : String(err);
                 console.error("[deploy-hook] deploy failed:", message);
-                sendJson(res, 500, { ok: false, error: message });
+                const partialLogs =
+                    err &&
+                    typeof err === "object" &&
+                    Array.isArray(err.stepLogs)
+                        ? err.stepLogs
+                        : undefined;
+                sendJson(res, 500, {
+                    ok: false,
+                    error: message,
+                    ...(partialLogs !== undefined
+                        ? { stepLogs: partialLogs }
+                        : {}),
+                });
                 return;
             } finally {
                 busy = false;
@@ -193,7 +281,7 @@ async function main() {
             console.log(
                 `[deploy-hook] completed deploy at ${repoRoot} (${steps.join(" -> ")})`,
             );
-            sendJson(res, 200, { ok: true, steps });
+            sendJson(res, 200, { ok: true, steps, stepLogs });
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             sendJson(res, 500, { ok: false, error: message });
