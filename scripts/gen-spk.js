@@ -13,7 +13,7 @@
  *   node scripts/gen-spk.js --raw     # hex only, no wrapper
  */
 
-const nacl = require("tweetnacl");
+import nacl from "tweetnacl";
 
 const raw =
     process.argv.includes("--raw") || process.argv.includes("-r");

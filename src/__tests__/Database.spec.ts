@@ -1,18 +1,30 @@
 // tslint:disable: no-string-literal
 
-jest.mock("uuid", () => ({ v4: () => "93ce482b-a0f2-4f6e-b1df-3aed61073552" }));
-
+import { vi, describe, it, expect } from "vitest";
 import { XUtils } from "@vex-chat/crypto";
-import { XTypes } from "@vex-chat/types";
-import uuid from "uuid";
+import type { IPreKeysSQL, IPreKeysWS } from "@vex-chat/types";
+import * as uuid from "uuid";
 import winston from "winston";
 
-import { Database } from "../Database";
-import { ISpireOptions } from "../Spire";
+import { Database } from "../Database.ts";
+import type { ISpireOptions } from "../Spire.ts";
+
+// vi.mock is hoisted above all imports automatically.
+// Minimal stubs for uuid functions used by spire src: v4, parse, stringify.
+vi.mock("uuid", () => ({
+    v4: vi.fn(() => "93ce482b-a0f2-4f6e-b1df-3aed61073552"),
+    parse: (s: string) =>
+        Uint8Array.from(s.replace(/-/g, "").match(/.{2}/g)!.map((b) => parseInt(b, 16))),
+    stringify: (b: Uint8Array) => {
+        const hex = Array.from(b).map((x) => x.toString(16).padStart(2, "0")).join("");
+        return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+    },
+    validate: () => true,
+}));
 
 /** Winston logger stub — Database.close() calls `.info`, and `{}` breaks that. */
 function silentLogger(): winston.Logger {
-    const noop = jest.fn();
+    const noop = vi.fn();
     return ({
         log: noop,
         info: noop,
@@ -36,7 +48,7 @@ describe("Database", () => {
         "dd0665079426c3efcf4dce9b1487e4aca132f8147581b3294c3f23ddd2b4ba8240a10082bd06805d7eb320d91af971da3306e11b60073ccc3d829710f5036004000030c2d0294c1cfdbb73c6b3bbe6010088c2dba8384b04ff2e2b92172431d66b5e"
     );
 
-    const testSQLPreKey: XTypes.SQL.IPreKeys = {
+    const testSQLPreKey: IPreKeysSQL = {
         userID,
         keyID,
         deviceID,
@@ -47,7 +59,7 @@ describe("Database", () => {
         index: 1,
     };
 
-    const testWSPreKey: XTypes.WS.IPreKeys = {
+    const testWSPreKey: IPreKeysWS = {
         publicKey,
         signature,
         deviceID,
@@ -62,8 +74,8 @@ describe("Database", () => {
         it("takes a userId and one time key, adds a keyId and saves it to oneTimeKey table", async () => {
             expect.assertions(1);
 
-            const v4Spy = jest.spyOn(uuid, "v4").mockReturnValue(keyID);
-            jest.spyOn(winston, "createLogger").mockReturnValueOnce(
+            vi.mocked(uuid.v4).mockReturnValueOnce(keyID);
+            vi.spyOn(winston, "createLogger").mockReturnValueOnce(
                 silentLogger()
             );
 
@@ -94,8 +106,6 @@ describe("Database", () => {
                     })();
                 });
             });
-
-            v4Spy.mockRestore();
         });
     });
 

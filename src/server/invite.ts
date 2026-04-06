@@ -1,28 +1,18 @@
-import fs from "fs";
-import path from "path";
-
-import { XUtils } from "@vex-chat/crypto";
-import { XTypes } from "@vex-chat/types";
+import { TokenScopes } from "@vex-chat/types";
 import express from "express";
-import FileType from "file-type";
-import msgpack from "msgpack-lite";
-import multer from "multer";
-import nacl from "tweetnacl";
 import * as uuid from "uuid";
 import winston from "winston";
 
-import parseDuration from "parse-duration";
-
-import { POWER_LEVELS } from "../ClientManager";
-import { Database } from "../Database";
-
-import { protect } from ".";
-import { ICensoredUser } from "./utils";
+import { msgpack } from "../utils/msgpack.ts";
+import { POWER_LEVELS } from "../ClientManager.ts";
+import { Database } from "../Database.ts";
+import { protect } from "./index.ts";
+import type { ICensoredUser } from "./utils.ts";
 
 export const getInviteRouter = (
     db: Database,
     log: winston.Logger,
-    tokenValidator: (key: string, scope: XTypes.HTTP.TokenScopes) => boolean,
+    tokenValidator: (key: string, scope: TokenScopes) => boolean,
     notify: (
         userID: string,
         event: string,

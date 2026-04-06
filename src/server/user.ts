@@ -1,21 +1,21 @@
 import { XUtils } from "@vex-chat/crypto";
-import { XTypes } from "@vex-chat/types";
+import type { IDevicePayload } from "@vex-chat/types";
+import { TokenScopes } from "@vex-chat/types";
 import express from "express";
 import nacl from "tweetnacl";
 import { stringify } from "uuid";
 import winston from "winston";
-import { protect } from ".";
+import { protect } from "./index.ts";
 
-import msgpack from "msgpack-lite";
-import { Database } from "../Database";
-import { censorUser, ICensoredUser } from "./utils";
+import { msgpack } from "../utils/msgpack.ts";
+import { Database } from "../Database.ts";
+import { censorUser, type ICensoredUser } from "./utils.ts";
 
-const TokenScopes = XTypes.HTTP.TokenScopes;
 
 export const getUserRouter = (
     db: Database,
     log: winston.Logger,
-    tokenValidator: (key: string, scope: XTypes.HTTP.TokenScopes) => boolean
+    tokenValidator: (key: string, scope: TokenScopes) => boolean
 ) => {
     const router = express.Router();
 
@@ -81,7 +81,7 @@ export const getUserRouter = (
 
     router.post("/:id/devices", protect, async (req, res) => {
         const userDetails = (req as any).user;
-        const devicePayload: XTypes.HTTP.IDevicePayload = req.body;
+        const devicePayload: IDevicePayload = req.body;
 
         const token = nacl.sign.open(
             XUtils.decodeHex(devicePayload.signed),

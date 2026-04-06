@@ -1,6 +1,7 @@
-import fs from "fs";
+import * as fs from "node:fs";
 
-import { XTypes } from "@vex-chat/types";
+import type { IDevice, IEmoji, IPreKeysWS } from "@vex-chat/types";
+import { TokenScopes } from "@vex-chat/types";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
@@ -11,24 +12,23 @@ import morgan from "morgan";
 import parseDuration from "parse-duration";
 import winston from "winston";
 
-import { Database } from "../Database";
+import { Database } from "../Database.ts";
 
 import { XUtils } from "@vex-chat/crypto";
-import atob from "atob";
-import FileType from "file-type";
+import { fileTypeFromBuffer, fileTypeFromFile } from "file-type";
 import jwt from "jsonwebtoken";
-import msgpack from "msgpack-lite";
+import { msgpack } from "../utils/msgpack.ts";
 import multer from "multer";
 import nacl from "tweetnacl";
-import { getAvatarRouter } from "./avatar";
-import { getFileRouter } from "./file";
-import { getInviteRouter } from "./invite";
-import { getUserRouter } from "./user";
+import { getAvatarRouter } from "./avatar.ts";
+import { getFileRouter } from "./file.ts";
+import { getInviteRouter } from "./invite.ts";
+import { getUserRouter } from "./user.ts";
 
 import * as uuid from "uuid";
-import { POWER_LEVELS } from "../ClientManager";
-import { JWT_EXPIRY } from "../Spire";
-import { censorUser, ICensoredUser } from "./utils";
+import { POWER_LEVELS } from "../ClientManager.ts";
+import { JWT_EXPIRY } from "../Spire.ts";
+import { censorUser, type ICensoredUser } from "./utils.ts";
 
 // expiry of regkeys
 export const EXPIRY_TIME = 1000 * 60 * 5;
@@ -41,7 +41,6 @@ export const ALLOWED_IMAGE_TYPES = [
     "image/avif",
 ];
 
-const TokenScopes = XTypes.HTTP.TokenScopes;
 
 interface IInvitePayload {
     serverID: string;
@@ -108,7 +107,7 @@ export const initApp = (
     api: expressWs.Application,
     db: Database,
     log: winston.Logger,
-    tokenValidator: (key: string, scope: XTypes.HTTP.TokenScopes) => boolean,
+    tokenValidator: (key: string, scope: TokenScopes) => boolean,
     signKeys: nacl.SignKeyPair,
     notify: (
         userID: string,
@@ -494,7 +493,7 @@ export const initApp = (
     });
 
     api.post("/device/:id/mail", protect, async (req, res) => {
-        const deviceDetails: XTypes.SQL.IDevice | undefined = (req as any)
+        const deviceDetails: IDevice | undefined = (req as any)
             .device;
         if (!deviceDetails) {
             res.sendStatus(401);
@@ -534,7 +533,7 @@ export const initApp = (
     });
 
     api.get("/device/:id/otk/count", protect, async (req, res) => {
-        const deviceDetails: XTypes.SQL.IDevice | undefined = (req as any)
+        const deviceDetails: IDevice | undefined = (req as any)
             .device;
         if (!deviceDetails) {
             res.sendStatus(401);
@@ -551,7 +550,7 @@ export const initApp = (
     });
 
     api.post("/device/:id/otk", protect, async (req, res) => {
-        const submittedOTKs: XTypes.WS.IPreKeys[] = req.body;
+        const submittedOTKs: IPreKeysWS[] = req.body;
         if (submittedOTKs.length === 0) {
             res.sendStatus(200);
             return;
@@ -598,31 +597,28 @@ export const initApp = (
     });
 
     api.get("/emoji/:emojiID", protect, async (req, res) => {
-        const stream = fs.createReadStream("./emoji/" + req.params.emojiID);
-        stream.on("error", (err) => {
-            // log.error(err.toString());
+        const filePath = "./emoji/" + req.params.emojiID;
+        const typeDetails = await fileTypeFromFile(filePath).catch(() => null);
+        if (!typeDetails) {
             res.sendStatus(404);
-        });
-
-        const typeDetails = await FileType.fromStream(stream);
-        if (typeDetails) {
-            res.set("Content-type", typeDetails.mime);
+            return;
         }
-
+        res.set("Content-type", typeDetails.mime);
         res.set("Cache-control", "public, max-age=31536000");
-        const stream2 = fs.createReadStream("./emoji/" + req.params.emojiID);
-        stream2.on("error", (err) => {
+
+        const stream = fs.createReadStream(filePath);
+        stream.on("error", (err) => {
             log.error(err.toString());
             res.sendStatus(500);
         });
-        stream2.pipe(res);
+        stream.pipe(res);
     });
 
     api.post("/emoji/:serverID/json", protect, async (req, res) => {
         const payload: IEmojiPayload = req.body;
 
         const userDetails: ICensoredUser = (req as any).user;
-        const device: XTypes.SQL.IDevice | undefined = (req as any).device;
+        const device: IDevice | undefined = (req as any).device;
 
         if (!device) {
             res.sendStatus(401);
@@ -662,7 +658,7 @@ export const initApp = (
             res.sendStatus(413);
         }
 
-        const mimeType = await FileType.fromBuffer(buf);
+        const mimeType = await fileTypeFromBuffer(buf);
         if (!ALLOWED_IMAGE_TYPES.includes(mimeType?.mime || "no/type")) {
             res.status(400).send({
                 error:
@@ -672,7 +668,7 @@ export const initApp = (
             return;
         }
 
-        const emoji: XTypes.SQL.IEmoji = {
+        const emoji: IEmoji = {
             emojiID: uuid.v4(),
             owner: req.params.serverID,
             name: payload.name,
@@ -700,7 +696,7 @@ export const initApp = (
             const payload: IEmojiPayload = req.body;
             const serverEntry = await db.retrieveServer(req.params.serverID);
             const userDetails: ICensoredUser = (req as any).user;
-            const deviceDetails: XTypes.SQL.IDevice | undefined = (req as any)
+            const deviceDetails: IDevice | undefined = (req as any)
                 .device;
             if (!deviceDetails) {
                 res.sendStatus(401);
@@ -745,7 +741,7 @@ export const initApp = (
                 res.sendStatus(413);
             }
 
-            const mimeType = await FileType.fromBuffer(req.file.buffer);
+            const mimeType = await fileTypeFromBuffer(req.file.buffer);
             if (!ALLOWED_IMAGE_TYPES.includes(mimeType?.mime || "no/type")) {
                 res.status(400).send({
                     error:
@@ -755,7 +751,7 @@ export const initApp = (
                 return;
             }
 
-            const emoji: XTypes.SQL.IEmoji = {
+            const emoji: IEmoji = {
                 emojiID: uuid.v4(),
                 owner: req.params.serverID,
                 name: payload.name,
