@@ -296,34 +296,120 @@ function getSummary(db, hours) {
     };
 }
 
-function getTimeseries(db, hours, limit) {
-    const windowStart = new Date(
-        Date.now() - hours * 60 * 60 * 1000,
-    ).toISOString();
+function roundOneDecimal(value) {
+    return Math.round(value * 10) / 10;
+}
+
+function percentile(values, p) {
+    if (values.length === 0) {
+        return null;
+    }
+    const sorted = [...values].sort((a, b) => a - b);
+    const rank = Math.ceil((p / 100) * sorted.length) - 1;
+    const idx = Math.min(sorted.length - 1, Math.max(0, rank));
+    return sorted[idx];
+}
+
+function getTimeseriesBuckets(db, windowHours, bucketMinutes) {
+    const windowStartMs = Date.now() - windowHours * 60 * 60 * 1000;
+    const bucketMs = bucketMinutes * 60 * 1000;
+    const alignedWindowStartMs = Math.floor(windowStartMs / bucketMs) * bucketMs;
+    const nowMs = Date.now();
+
     const rows = db
         .prepare(
             `
         SELECT
-            id,
             sampled_at,
             ok,
-            http_status,
             request_latency_ms
         FROM status_samples
         WHERE sampled_at >= ?
         ORDER BY sampled_at ASC
-        LIMIT ?
     `,
         )
-        .all(windowStart, limit);
+        .all(new Date(alignedWindowStartMs).toISOString());
 
-    return rows.map((row) => ({
-        id: row.id,
-        sampledAt: row.sampled_at,
-        ok: Boolean(row.ok),
-        httpStatus: row.http_status,
-        requestLatencyMs: row.request_latency_ms,
-    }));
+    const bucketMap = new Map();
+
+    for (
+        let bucketStartMs = alignedWindowStartMs;
+        bucketStartMs <= nowMs;
+        bucketStartMs += bucketMs
+    ) {
+        bucketMap.set(bucketStartMs, {
+            bucketStartMs,
+            bucketEndMs: bucketStartMs + bucketMs - 1,
+            sampleCount: 0,
+            upCount: 0,
+            downCount: 0,
+            latencies: [],
+        });
+    }
+
+    for (const row of rows) {
+        const sampledMs = Date.parse(row.sampled_at);
+        if (!Number.isFinite(sampledMs)) {
+            continue;
+        }
+        const bucketStartMs = Math.floor(sampledMs / bucketMs) * bucketMs;
+        const bucket = bucketMap.get(bucketStartMs);
+        if (!bucket) {
+            continue;
+        }
+        bucket.sampleCount += 1;
+        if (Boolean(row.ok)) {
+            bucket.upCount += 1;
+        } else {
+            bucket.downCount += 1;
+        }
+        if (typeof row.request_latency_ms === "number") {
+            bucket.latencies.push(row.request_latency_ms);
+        }
+    }
+
+    const blocks = Array.from(bucketMap.values()).map((bucket) => {
+        const uptimePercent =
+            bucket.sampleCount === 0
+                ? 0
+                : (bucket.upCount / bucket.sampleCount) * 100;
+        const avgLatencyMs =
+            bucket.latencies.length === 0
+                ? null
+                : roundOneDecimal(
+                      bucket.latencies.reduce((sum, n) => sum + n, 0) /
+                          bucket.latencies.length,
+                  );
+        const p95LatencyMs = percentile(bucket.latencies, 95);
+        const maxLatencyMs =
+            bucket.latencies.length === 0
+                ? null
+                : Math.max(...bucket.latencies);
+
+        let status = "no_data";
+        if (bucket.sampleCount > 0) {
+            status = bucket.downCount === 0 ? "up" : "down";
+        }
+
+        return {
+            bucketStart: new Date(bucket.bucketStartMs).toISOString(),
+            bucketEnd: new Date(bucket.bucketEndMs).toISOString(),
+            sampleCount: bucket.sampleCount,
+            upCount: bucket.upCount,
+            downCount: bucket.downCount,
+            uptimePercent: roundOneDecimal(uptimePercent),
+            avgLatencyMs,
+            p95LatencyMs,
+            maxLatencyMs,
+            status,
+        };
+    });
+
+    return {
+        windowHours,
+        bucketMinutes,
+        blocks,
+    };
 }
 
 function sendJson(res, statusCode, payload) {
@@ -383,18 +469,37 @@ function startApiServer(db, host, port) {
                 url.pathname === "/timeseries" ||
                 url.pathname === "/api/timeseries"
             ) {
-                const hours = Number(url.searchParams.get("hours") || "24");
-                const limit = Number(url.searchParams.get("limit") || "5000");
-                if (!Number.isFinite(hours) || hours <= 0) {
-                    sendJson(res, 400, { error: "hours must be > 0" });
+                const windowHours = Number(
+                    url.searchParams.get("windowHours") ||
+                        url.searchParams.get("hours") ||
+                        "24",
+                );
+                const bucketMinutes = Number(
+                    url.searchParams.get("bucketMinutes") || "1440",
+                );
+
+                if (!Number.isFinite(windowHours) || windowHours <= 0) {
+                    sendJson(res, 400, {
+                        error: "windowHours must be > 0",
+                    });
                     return;
                 }
-                if (!Number.isFinite(limit) || limit < 1 || limit > 50_000) {
-                    sendJson(res, 400, { error: "limit must be between 1 and 50000" });
+                if (
+                    !Number.isFinite(bucketMinutes) ||
+                    bucketMinutes < 1 ||
+                    bucketMinutes > 10_080
+                ) {
+                    sendJson(res, 400, {
+                        error: "bucketMinutes must be between 1 and 10080",
+                    });
                     return;
                 }
                 sendJson(res, 200, {
-                    data: getTimeseries(db, hours, limit),
+                    data: getTimeseriesBuckets(
+                        db,
+                        windowHours,
+                        bucketMinutes,
+                    ),
                 });
                 return;
             }
