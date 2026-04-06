@@ -49,8 +49,49 @@ jobs:
             echo "DEPLOY_HOOK_URL and/or DEPLOY_HOOK_SECRET not set; skipping deploy hook."
             exit 0
           fi
-          resp=$(curl -fsS -X POST "$DEPLOY_HOOK_URL" \
+
+          tmp="$(mktemp)"
+          trap 'rm -f "$tmp"' EXIT
+          http_code="$(curl -sS -X POST "$DEPLOY_HOOK_URL" \
             -H "Authorization: Bearer ${DEPLOY_HOOK_SECRET}" \
             -H "Content-Type: application/json" \
-            --data '{}')
-          echo "$resp" | jq . 2>/dev/null || echo "$resp"
+            --data '{}' \
+            -o "$tmp" -w '%{http_code}')"
+          resp="$(cat "$tmp")"
+
+          if echo "$resp" | jq -e '(.stepLogs | type) == "array"' >/dev/null 2>&1; then
+            echo "$resp" | jq -r '
+              (if .ok == false then "\n!!! " + (.error | tostring) + " !!!\n" else "" end)
+              + (
+                [.stepLogs[]?
+                  | "\n────────────────────────────────────────\n" + .command + "\n────────────────────────────────────────\n"
+                    + (
+                        (.stdout // "")
+                        | if length == 0 then ""
+                          elif endswith("\n") then .
+                          else . + "\n"
+                          end
+                      )
+                    + (
+                        (.stderr // "")
+                        | if length == 0 then ""
+                          elif endswith("\n") then .
+                          else . + "\n"
+                          end
+                      )
+                ] | join("")
+              )
+              + "\n"
+            '
+          else
+            echo "$resp"
+          fi
+
+          outcome="$(echo "$resp" | jq -r '.outcome // "missing"' 2>/dev/null || echo invalid)"
+          if [ "$http_code" = "200" ] && echo "$resp" | jq -e '.outcome == "success" and .ok == true' >/dev/null 2>&1; then
+            echo "Deploy hook: OK (HTTP $http_code, outcome=$outcome)"
+            exit 0
+          fi
+
+          echo "::error::Deploy hook failed (HTTP $http_code, outcome=$outcome)"
+          exit 1

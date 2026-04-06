@@ -12,6 +12,26 @@ const DEFAULT_GIT_REF = "master";
 const DEFAULT_PM2_APP = "spire";
 const DEFAULT_LOG_CHARS_PER_STREAM = 65_536;
 
+/** Strip ANSI escape sequences (colors, cursor moves) for plain logs. */
+function stripAnsi(text) {
+    if (!text) {
+        return text;
+    }
+    return text.replace(/\u001b\[[\d;?]*[\dA-Za-z]/g, "").replace(/\u001b][\d;]*[^\u0007]*\u0007/g, "");
+}
+
+function childProcessEnv() {
+    if (process.env.DEPLOY_HOOK_KEEP_COLORS === "1") {
+        return process.env;
+    }
+    return {
+        ...process.env,
+        NO_COLOR: "1",
+        FORCE_COLOR: "0",
+        CI: process.env.CI || "1",
+    };
+}
+
 function envString(name, fallback) {
     const v = process.env[name];
     return v === undefined || v === "" ? fallback : v;
@@ -72,7 +92,7 @@ function run(cmd, args, cwd) {
     return new Promise((resolve, reject) => {
         const child = spawn(cmd, args, {
             cwd,
-            env: process.env,
+            env: childProcessEnv(),
             stdio: ["ignore", "pipe", "pipe"],
         });
         let stdout = "";
@@ -126,15 +146,15 @@ async function runDeploy({ repoRoot, gitRef, pm2App }) {
         let stderr = "";
         try {
             const out = await run(cmd, args, repoRoot);
-            stdout = out.stdout;
-            stderr = out.stderr;
+            stdout = stripAnsi(out.stdout);
+            stderr = stripAnsi(out.stderr);
         } catch (e) {
             if (e && typeof e === "object") {
                 if ("stdout" in e && typeof e.stdout === "string") {
-                    stdout = e.stdout;
+                    stdout = stripAnsi(e.stdout);
                 }
                 if ("stderr" in e && typeof e.stderr === "string") {
-                    stderr = e.stderr;
+                    stderr = stripAnsi(e.stderr);
                 }
             }
             if (stdout) {
@@ -169,11 +189,102 @@ async function runDeploy({ repoRoot, gitRef, pm2App }) {
         appendResponseLog(command, stdout, stderr);
     }
 
+    function formatPm2SummaryFromJlist(rawJson, name) {
+        let list;
+        try {
+            list = JSON.parse(rawJson.trim());
+        } catch {
+            return "pm2 jlist: invalid JSON\n";
+        }
+        if (!Array.isArray(list)) {
+            return "pm2 jlist: unexpected shape\n";
+        }
+        const app = list.find((p) => p && p.name === name);
+        if (!app) {
+            return `pm2 jlist: no process named "${name}"\n`;
+        }
+        const memKb = app.monit?.memory;
+        const mem =
+            typeof memKb === "number"
+                ? `${(memKb / 1024 / 1024).toFixed(1)} MiB`
+                : "?";
+        const cpu =
+            typeof app.monit?.cpu === "number"
+                ? `${app.monit.cpu}%`
+                : "?";
+        const status = app.pm2_env?.status ?? "?";
+        const pid = app.pid ?? "?";
+        const restarts = app.pm2_env?.restart_time ?? "?";
+        const startedMs = app.pm2_env?.pm_uptime;
+        const uptime =
+            typeof startedMs === "number"
+                ? `${Math.max(0, Math.floor((Date.now() - startedMs) / 1000))}s`
+                : "?";
+        return (
+            `${name}: status=${status} pid=${pid} cpu=${cpu} mem=${mem} uptime=${uptime} restarts=${restarts}\n`
+        );
+    }
+
+    /**
+     * pm2 restart prints a Unicode table; omit it from logs and record a plain line from jlist.
+     */
+    async function stepPm2Restart(name) {
+        const command = `pm2 restart ${name}`;
+        console.log(`[deploy-hook] --- ${command} ---`);
+        let restartOut = "";
+        let restartErr = "";
+        try {
+            const out = await run("pm2", ["restart", name], repoRoot);
+            restartOut = stripAnsi(out.stdout);
+            restartErr = stripAnsi(out.stderr);
+        } catch (e) {
+            if (e && typeof e === "object") {
+                if ("stdout" in e && typeof e.stdout === "string") {
+                    restartOut = stripAnsi(e.stdout);
+                }
+                if ("stderr" in e && typeof e.stderr === "string") {
+                    restartErr = stripAnsi(e.stderr);
+                }
+            }
+            const tail = (restartErr || restartOut).trim();
+            if (tail) {
+                process.stdout.write(`${tail}\n`);
+            }
+            appendResponseLog(command, restartOut, restartErr);
+            if (e instanceof Error) {
+                e.stepLogs = stepLogs;
+                throw e;
+            }
+            const wrapped = new Error(String(e));
+            wrapped.stepLogs = stepLogs;
+            throw wrapped;
+        }
+
+        let summary = "";
+        try {
+            const { stdout: jraw } = await run("pm2", ["jlist"], repoRoot);
+            summary = formatPm2SummaryFromJlist(jraw, name);
+        } catch (e2) {
+            summary = `pm2 jlist failed: ${e2 instanceof Error ? e2.message : e2}\n`;
+        }
+
+        const plainStdout = summary;
+        const plainStderr =
+            restartErr.trim() !== "" ? `${restartErr.trim()}\n` : "";
+
+        process.stdout.write(plainStdout);
+        if (plainStderr) {
+            process.stderr.write(plainStderr);
+        }
+
+        appendResponseLog(command, plainStdout, plainStderr);
+    }
+
     await step("git", ["fetch", "origin"]);
     await step("git", ["checkout", gitRef]);
     await step("git", ["pull", "--ff-only", "origin", gitRef]);
     await step("npm", ["install"]);
-    await step("pm2", ["restart", pm2App]);
+    await stepPm2Restart(pm2App);
 
     const steps = stepLogs.map((s) => s.command);
     return { steps, stepLogs };
@@ -222,12 +333,17 @@ async function main() {
             const pathname = url.pathname.replace(/\/+$/, "") || "/";
 
             if (req.method === "GET" && pathname === "/healthz") {
-                sendJson(res, 200, { ok: true });
+                sendJson(res, 200, { ok: true, outcome: "success" });
                 return;
             }
 
             if (req.method !== "POST" || pathname !== "/deploy") {
-                sendJson(res, 404, { ok: false, error: "Not found." });
+                sendJson(res, 404, {
+                    ok: false,
+                    outcome: "failure",
+                    error: "Not found.",
+                    errorCode: "not_found",
+                });
                 return;
             }
 
@@ -235,14 +351,21 @@ async function main() {
 
             const provided = getProvidedSecret(req);
             if (!secretMatches(provided, secret)) {
-                sendJson(res, 401, { ok: false, error: "Unauthorized." });
+                sendJson(res, 401, {
+                    ok: false,
+                    outcome: "failure",
+                    error: "Unauthorized.",
+                    errorCode: "unauthorized",
+                });
                 return;
             }
 
             if (busy) {
                 sendJson(res, 409, {
                     ok: false,
+                    outcome: "failure",
                     error: "Deploy already in progress.",
+                    errorCode: "conflict",
                 });
                 return;
             }
@@ -266,9 +389,11 @@ async function main() {
                     Array.isArray(err.stepLogs)
                         ? err.stepLogs
                         : undefined;
-                sendJson(res, 500, {
+                sendJson(res, 422, {
                     ok: false,
+                    outcome: "failure",
                     error: message,
+                    errorCode: "deploy_failed",
                     ...(partialLogs !== undefined
                         ? { stepLogs: partialLogs }
                         : {}),
@@ -281,10 +406,20 @@ async function main() {
             console.log(
                 `[deploy-hook] completed deploy at ${repoRoot} (${steps.join(" -> ")})`,
             );
-            sendJson(res, 200, { ok: true, steps, stepLogs });
+            sendJson(res, 200, {
+                ok: true,
+                outcome: "success",
+                steps,
+                stepLogs,
+            });
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
-            sendJson(res, 500, { ok: false, error: message });
+            sendJson(res, 500, {
+                ok: false,
+                outcome: "failure",
+                error: message,
+                errorCode: "internal_error",
+            });
         }
     });
 
