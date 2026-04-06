@@ -17,7 +17,9 @@
         "format": "prettier '**/*.{ts,tsx,json,md}' --tab-width 4 --write",
         "test": "vitest run",
         "gen-spk": "node scripts/gen-spk.js",
-        "docs": "node ./scripts/generate-docs.js"
+        "docs": "node ./scripts/generate-docs.js",
+        "monitor:status": "node ./scripts/monitor-status.js",
+        "monitor:status:summary": "node ./scripts/status-summary.js"
     },
     "devDependencies": {
         "@types/better-sqlite3": "^7.6.0",
