@@ -45,9 +45,12 @@ for (const dir of directories) {
 
 const getAppVersion = (): string => {
     try {
-        const raw = fs.readFileSync(new URL("../package.json", import.meta.url), {
-            encoding: "utf8",
-        });
+        const raw = fs.readFileSync(
+            new URL("../package.json", import.meta.url),
+            {
+                encoding: "utf8",
+            },
+        );
         const pkg = JSON.parse(raw) as { version?: string };
         return pkg.version || "unknown";
     } catch {
@@ -322,8 +325,7 @@ export class Spire extends EventEmitter {
                         this.deleteActionToken(token);
                     }, TOKEN_EXPIRY);
 
-                    const acceptHeader =
-                        req.get("accept")?.toLowerCase() || "";
+                    const acceptHeader = req.get("accept")?.toLowerCase() || "";
                     const wantsJson =
                         acceptHeader.includes("application/json") &&
                         !acceptHeader.includes("application/msgpack");
@@ -385,7 +387,8 @@ export class Spire extends EventEmitter {
                 commitSha,
                 checkDurationMs,
                 latencyBudgetMs: STATUS_LATENCY_BUDGET_MS,
-                withinLatencyBudget: checkDurationMs <= STATUS_LATENCY_BUDGET_MS,
+                withinLatencyBudget:
+                    checkDurationMs <= STATUS_LATENCY_BUDGET_MS,
                 metrics: {
                     requestsTotal: this.requestsTotal,
                     activeWebsocketClients: this.clients.length,

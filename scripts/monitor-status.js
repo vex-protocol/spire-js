@@ -1,16 +1,21 @@
 import Database from "better-sqlite3";
 import fs from "node:fs";
+import { createServer } from "node:http";
 import path from "node:path";
 
 const DEFAULT_URL = "https://api.vex.wtf/status";
 const DEFAULT_INTERVAL_MS = 10_000;
 const DEFAULT_DB_PATH = "./monitoring/status-history.sqlite";
+const DEFAULT_API_PORT = 6767;
+const DEFAULT_API_HOST = "0.0.0.0";
 
 function parseArgs(argv) {
     const config = {
         url: process.env.STATUS_URL || DEFAULT_URL,
         intervalMs: Number(process.env.STATUS_INTERVAL_MS || DEFAULT_INTERVAL_MS),
         dbPath: process.env.STATUS_DB_PATH || DEFAULT_DB_PATH,
+        apiPort: Number(process.env.STATUS_API_PORT || DEFAULT_API_PORT),
+        apiHost: process.env.STATUS_API_HOST || DEFAULT_API_HOST,
     };
 
     for (let i = 0; i < argv.length; i += 1) {
@@ -28,11 +33,24 @@ function parseArgs(argv) {
         if (arg === "--db" && argv[i + 1]) {
             config.dbPath = argv[i + 1];
             i += 1;
+            continue;
+        }
+        if (arg === "--port" && argv[i + 1]) {
+            config.apiPort = Number(argv[i + 1]);
+            i += 1;
+            continue;
+        }
+        if (arg === "--host" && argv[i + 1]) {
+            config.apiHost = argv[i + 1];
+            i += 1;
         }
     }
 
     if (!Number.isFinite(config.intervalMs) || config.intervalMs < 1_000) {
         throw new Error("Interval must be >= 1000ms.");
+    }
+    if (!Number.isFinite(config.apiPort) || config.apiPort < 1 || config.apiPort > 65535) {
+        throw new Error("Port must be between 1 and 65535.");
     }
 
     return config;
@@ -204,13 +222,206 @@ function formatLog(sample) {
     return `[${sample.sampledAt}] ${status} code=${code} latency=${latency} ws=${ws} reqs=${reqs}${err}`;
 }
 
+function toPublicRow(row) {
+    if (!row) {
+        return null;
+    }
+    return {
+        id: row.id,
+        sampledAt: row.sampled_at,
+        targetUrl: row.target_url,
+        ok: Boolean(row.ok),
+        httpStatus: row.http_status,
+        requestLatencyMs: row.request_latency_ms,
+        serviceUptimeSeconds: row.service_uptime_seconds,
+        serviceVersion: row.service_version,
+        serviceCommitSha: row.service_commit_sha,
+        statusCheckDurationMs: row.status_check_duration_ms,
+        withinLatencyBudget:
+            row.within_latency_budget === null
+                ? null
+                : Boolean(row.within_latency_budget),
+        requestsTotal: row.requests_total,
+        activeWebsocketClients: row.active_websocket_clients,
+        dbReady: row.db_ready === null ? null : Boolean(row.db_ready),
+        dbHealthy: row.db_healthy === null ? null : Boolean(row.db_healthy),
+        errorText: row.error_text,
+    };
+}
+
+function getLatestSample(db) {
+    const row = db
+        .prepare(
+            `
+        SELECT *
+        FROM status_samples
+        ORDER BY id DESC
+        LIMIT 1
+    `,
+        )
+        .get();
+    return toPublicRow(row);
+}
+
+function getSummary(db, hours) {
+    const windowStart = new Date(
+        Date.now() - hours * 60 * 60 * 1000,
+    ).toISOString();
+    const row = db
+        .prepare(
+            `
+        SELECT
+            COUNT(*) AS total_samples,
+            SUM(CASE WHEN ok = 1 THEN 1 ELSE 0 END) AS up_samples,
+            AVG(request_latency_ms) AS avg_latency_ms,
+            MAX(request_latency_ms) AS max_latency_ms
+        FROM status_samples
+        WHERE sampled_at >= ?
+    `,
+        )
+        .get(windowStart);
+
+    const totalSamples = Number(row?.total_samples || 0);
+    const upSamples = Number(row?.up_samples || 0);
+    return {
+        windowHours: hours,
+        totalSamples,
+        upSamples,
+        downSamples: Math.max(0, totalSamples - upSamples),
+        uptimePercent: totalSamples === 0 ? 0 : (upSamples / totalSamples) * 100,
+        averageLatencyMs:
+            row?.avg_latency_ms === null ? null : Number(row.avg_latency_ms),
+        maxLatencyMs: row?.max_latency_ms === null ? null : Number(row.max_latency_ms),
+        latest: getLatestSample(db),
+    };
+}
+
+function getTimeseries(db, hours, limit) {
+    const windowStart = new Date(
+        Date.now() - hours * 60 * 60 * 1000,
+    ).toISOString();
+    const rows = db
+        .prepare(
+            `
+        SELECT
+            id,
+            sampled_at,
+            ok,
+            http_status,
+            request_latency_ms,
+            active_websocket_clients
+        FROM status_samples
+        WHERE sampled_at >= ?
+        ORDER BY sampled_at ASC
+        LIMIT ?
+    `,
+        )
+        .all(windowStart, limit);
+
+    return rows.map((row) => ({
+        id: row.id,
+        sampledAt: row.sampled_at,
+        ok: Boolean(row.ok),
+        httpStatus: row.http_status,
+        requestLatencyMs: row.request_latency_ms,
+        activeWebsocketClients: row.active_websocket_clients,
+    }));
+}
+
+function sendJson(res, statusCode, payload) {
+    res.statusCode = statusCode;
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.end(JSON.stringify(payload));
+}
+
+function startApiServer(db, host, port) {
+    const server = createServer((req, res) => {
+        try {
+            if (req.method === "OPTIONS") {
+                res.statusCode = 204;
+                res.setHeader("Access-Control-Allow-Origin", "*");
+                res.setHeader(
+                    "Access-Control-Allow-Headers",
+                    "Content-Type, Authorization",
+                );
+                res.setHeader(
+                    "Access-Control-Allow-Methods",
+                    "GET, OPTIONS",
+                );
+                res.end();
+                return;
+            }
+
+            const baseUrl = `http://${req.headers.host || "localhost"}`;
+            const url = new URL(req.url || "/", baseUrl);
+
+            if (req.method !== "GET") {
+                sendJson(res, 405, { error: "Method not allowed." });
+                return;
+            }
+
+            if (url.pathname === "/healthz") {
+                sendJson(res, 200, { ok: true });
+                return;
+            }
+
+            if (url.pathname === "/latest" || url.pathname === "/api/latest") {
+                sendJson(res, 200, { data: getLatestSample(db) });
+                return;
+            }
+
+            if (url.pathname === "/summary" || url.pathname === "/api/summary") {
+                const hours = Number(url.searchParams.get("hours") || "24");
+                if (!Number.isFinite(hours) || hours <= 0) {
+                    sendJson(res, 400, { error: "hours must be > 0" });
+                    return;
+                }
+                sendJson(res, 200, { data: getSummary(db, hours) });
+                return;
+            }
+
+            if (
+                url.pathname === "/timeseries" ||
+                url.pathname === "/api/timeseries"
+            ) {
+                const hours = Number(url.searchParams.get("hours") || "24");
+                const limit = Number(url.searchParams.get("limit") || "5000");
+                if (!Number.isFinite(hours) || hours <= 0) {
+                    sendJson(res, 400, { error: "hours must be > 0" });
+                    return;
+                }
+                if (!Number.isFinite(limit) || limit < 1 || limit > 50_000) {
+                    sendJson(res, 400, { error: "limit must be between 1 and 50000" });
+                    return;
+                }
+                sendJson(res, 200, {
+                    data: getTimeseries(db, hours, limit),
+                });
+                return;
+            }
+
+            sendJson(res, 404, { error: "Not found." });
+        } catch (err) {
+            sendJson(res, 500, {
+                error: err instanceof Error ? err.message : String(err),
+            });
+        }
+    });
+
+    server.listen(port, host);
+    return server;
+}
+
 async function main() {
     const config = parseArgs(process.argv.slice(2));
     const db = initializeDatabase(config.dbPath);
+    const apiServer = startApiServer(db, config.apiHost, config.apiPort);
 
     console.log(`Monitoring ${config.url}`);
     console.log(`Interval: ${config.intervalMs}ms`);
     console.log(`Database: ${config.dbPath}`);
+    console.log(`API: http://${config.apiHost}:${config.apiPort}`);
 
     let shutdownRequested = false;
     let forceExitRequested = false;
@@ -230,6 +441,7 @@ async function main() {
         if (!forceExitRequested) {
             forceExitRequested = true;
             console.log("Force exiting.");
+            apiServer.close();
             db.close();
             process.exit(130);
         }
@@ -262,6 +474,9 @@ async function main() {
         }
         process.off("SIGINT", requestShutdown);
         process.off("SIGTERM", requestShutdown);
+        await new Promise((resolve) => {
+            apiServer.close(() => resolve());
+        });
         db.close();
     }
 
