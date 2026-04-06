@@ -26,16 +26,32 @@ const normalizePath = (prefix, routePath) => {
     return openApiPath;
 };
 
-const operationTemplate = (method, openApiPath) => ({
-    summary: `${method.toUpperCase()} ${openApiPath}`,
-    responses: {
-        200: { description: "Success" },
-        400: { description: "Bad request" },
-        401: { description: "Unauthorized" },
-        404: { description: "Not found" },
-        500: { description: "Server error" },
-    },
-});
+const extractPathParameters = (openApiPath) => {
+    const matches = [...openApiPath.matchAll(/\{([A-Za-z0-9_]+)\}/g)];
+    return matches.map((match) => ({
+        name: match[1],
+        in: "path",
+        required: true,
+        schema: {
+            type: "string",
+        },
+    }));
+};
+
+const operationTemplate = (method, openApiPath) => {
+    const parameters = extractPathParameters(openApiPath);
+    return {
+        summary: `${method.toUpperCase()} ${openApiPath}`,
+        ...(parameters.length > 0 ? { parameters } : {}),
+        responses: {
+            200: { description: "Success" },
+            400: { description: "Bad request" },
+            401: { description: "Unauthorized" },
+            404: { description: "Not found" },
+            500: { description: "Server error" },
+        },
+    };
+};
 
 const paths = {};
 
@@ -66,6 +82,11 @@ const spec = {
         version: "1.0.0",
         description: "Auto-generated endpoint reference for the Spire Express API.",
     },
+    servers: [
+        {
+            url: "https://api.vex.wtf",
+        },
+    ],
     paths,
 };
 
