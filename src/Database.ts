@@ -21,15 +21,16 @@ import { EventEmitter } from "events";
 import { pbkdf2Sync } from "node:crypto";
 import * as fs from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import BetterSqlite3 from "better-sqlite3";
 import {
     Kysely,
     Migrator,
-    FileMigrationProvider,
     SqliteDialect,
     sql,
+    type Migration,
+    type MigrationProvider,
 } from "kysely";
 import * as uuid from "uuid";
 import winston from "winston";
@@ -39,6 +40,9 @@ import type { ISpireOptions } from "./Spire.ts";
 import { createLogger } from "./utils/createLogger.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// On Windows, dynamic import() needs file:// URLs, not bare paths like "D:\...".
+// pathToFileURL handles this cross-platform.
+const migrationFolder = path.join(__dirname, "migrations");
 
 const pubkeyRegex = /[0-9a-f]{64}/;
 export const ITERATIONS = 1000;
@@ -880,13 +884,27 @@ export class Database extends EventEmitter {
     }
 
     private async init(): Promise<void> {
+        // Custom migration provider that uses file:// URLs for dynamic import().
+        // FileMigrationProvider uses bare paths which break on Windows (D:\ is
+        // not a valid URL scheme for Node's ESM loader).
+        const provider: MigrationProvider = {
+            async getMigrations(): Promise<Record<string, Migration>> {
+                const files = await fs.readdir(migrationFolder);
+                const migrations: Record<string, Migration> = {};
+                for (const file of files) {
+                    if (!file.endsWith(".ts") && !file.endsWith(".js"))
+                        continue;
+                    const key = file.replace(/\.[tj]s$/, "");
+                    const fullPath = path.join(migrationFolder, file);
+                    const url = pathToFileURL(fullPath).href;
+                    migrations[key] = await import(url);
+                }
+                return migrations;
+            },
+        };
         const migrator = new Migrator({
             db: this.db,
-            provider: new FileMigrationProvider({
-                fs,
-                path,
-                migrationFolder: path.join(__dirname, "migrations"),
-            }),
+            provider,
         });
         const { error } = await migrator.migrateToLatest();
         if (error) {
