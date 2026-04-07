@@ -35,6 +35,8 @@ import { getJwtSecret } from "./utils/jwtSecret.ts";
 // expiry of regkeys = 24hr
 export const TOKEN_EXPIRY = 1000 * 60 * 10;
 export const JWT_EXPIRY = "7d";
+export const DEVICE_AUTH_JWT_EXPIRY = "1h";
+const DEVICE_CHALLENGE_EXPIRY = 1000 * 60; // 60 seconds
 const STATUS_LATENCY_BUDGET_MS = 250;
 
 // 3-19 chars long
@@ -109,6 +111,10 @@ export class Spire extends EventEmitter {
     private signKeys: nacl.SignKeyPair;
 
     private actionTokens: IActionToken[] = [];
+    private deviceChallenges = new Map<
+        string,
+        { deviceID: string; nonce: string; time: number }
+    >();
 
     private log: winston.Logger;
     private server: Server | null = null;
@@ -478,6 +484,135 @@ export class Spire extends EventEmitter {
             );
             res.cookie("auth", token, { path: "/" });
             res.sendStatus(200);
+        });
+
+        // ── Device-key challenge-response auth (ADR-007) ────────────
+        // Passwordless auto-login using the Ed25519 device key already
+        // stored in the OS keychain. No passwords, no JWTs persisted.
+
+        this.api.post("/auth/device", async (req, res) => {
+            try {
+                const { deviceID, signKey } = req.body as {
+                    deviceID: string;
+                    signKey: string;
+                };
+                if (!deviceID || !signKey) {
+                    return res
+                        .status(400)
+                        .send({ error: "deviceID and signKey required." });
+                }
+
+                const device = await this.db.retrieveDevice(deviceID);
+                if (!device || device.signKey !== signKey) {
+                    return res.status(404).send({ error: "Device not found." });
+                }
+
+                // Generate challenge nonce (32 bytes)
+                const nonce = XUtils.encodeHex(nacl.randomBytes(32));
+                const challengeID = uuid.v4();
+                this.deviceChallenges.set(challengeID, {
+                    deviceID,
+                    nonce,
+                    time: Date.now(),
+                });
+
+                // Clean up expired challenges
+                setTimeout(() => {
+                    this.deviceChallenges.delete(challengeID);
+                }, DEVICE_CHALLENGE_EXPIRY);
+
+                this.log.info("Device challenge issued for " + deviceID);
+                return res.json({ challengeID, challenge: nonce });
+            } catch (err) {
+                this.log.error("Device challenge error: " + err);
+                return res.sendStatus(500);
+            }
+        });
+
+        this.api.post("/auth/device/verify", async (req, res) => {
+            try {
+                const { challengeID, signed } = req.body as {
+                    challengeID: string;
+                    signed: string;
+                };
+                if (!challengeID || !signed) {
+                    return res.status(400).send({
+                        error: "challengeID and signed required.",
+                    });
+                }
+
+                const challenge = this.deviceChallenges.get(challengeID);
+                if (!challenge) {
+                    return res.status(401).send({
+                        error: "Challenge expired or not found.",
+                    });
+                }
+
+                // Consume the challenge (single-use)
+                this.deviceChallenges.delete(challengeID);
+
+                // Check expiry
+                if (Date.now() - challenge.time > DEVICE_CHALLENGE_EXPIRY) {
+                    return res
+                        .status(401)
+                        .send({ error: "Challenge expired." });
+                }
+
+                // Look up the device to get its public signKey
+                const device = await this.db.retrieveDevice(challenge.deviceID);
+                if (!device) {
+                    return res.status(404).send({ error: "Device not found." });
+                }
+
+                // Verify the Ed25519 signature
+                const opened = nacl.sign.open(
+                    XUtils.decodeHex(signed),
+                    XUtils.decodeHex(device.signKey),
+                );
+                if (!opened) {
+                    return res
+                        .status(401)
+                        .send({ error: "Signature verification failed." });
+                }
+
+                // Verify the signed content matches the challenge nonce
+                const signedNonce = XUtils.encodeHex(opened);
+                if (signedNonce !== challenge.nonce) {
+                    return res
+                        .status(401)
+                        .send({ error: "Challenge mismatch." });
+                }
+
+                // Look up device owner
+                const user = await this.db.retrieveUser(device.owner);
+                if (!user) {
+                    return res
+                        .status(404)
+                        .send({ error: "Device owner not found." });
+                }
+
+                // Issue short-lived JWT (1 hour, not 7 days)
+                const token = jwt.sign(
+                    { user: censorUser(user) },
+                    getJwtSecret(),
+                    { expiresIn: DEVICE_AUTH_JWT_EXPIRY },
+                );
+                res.cookie("auth", token, { path: "/" });
+
+                this.log.info(
+                    "Device-key auth succeeded for " +
+                        user.username +
+                        " (device " +
+                        device.deviceID +
+                        ")",
+                );
+                return res.send(
+                    msgpack.encode({ user: censorUser(user), token }),
+                );
+            } catch (err) {
+                this.log.error("Device verify error: " + err);
+                return res.sendStatus(500);
+            }
         });
 
         this.api.post("/mail", protect, async (req, res) => {
