@@ -125,9 +125,10 @@ describe("Database", () => {
                 provider.once("ready", () => {
                     void (async () => {
                         try {
-                            await provider["db"]("preKeys").insert(
-                                testSQLPreKey,
-                            );
+                            await provider["db"]
+                                .insertInto("preKeys")
+                                .values(testSQLPreKey)
+                                .execute();
                             const result = await provider.getPreKeys(deviceID);
                             expect(result).toEqual(testWSPreKey);
                             await provider.close();
