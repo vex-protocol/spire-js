@@ -30,6 +30,7 @@ import { Database, hashPassword } from "./Database.ts";
 import { initApp, protect } from "./server/index.ts";
 import { censorUser } from "./server/utils.ts";
 import { createLogger } from "./utils/createLogger.ts";
+import { getJwtSecret } from "./utils/jwtSecret.ts";
 
 // expiry of regkeys = 24hr
 export const TOKEN_EXPIRY = 1000 * 60 * 10;
@@ -280,7 +281,7 @@ export class Spire extends EventEmitter {
                                 parsed.type,
                         );
                     }
-                    const result = jwt.verify(parsed.token, process.env.SPK!);
+                    const result = jwt.verify(parsed.token, getJwtSecret());
                     const userDetails: IUser = (result as any).user;
 
                     this.log.info(
@@ -472,7 +473,7 @@ export class Spire extends EventEmitter {
         this.api.post("/goodbye", protect, async (req, res) => {
             const token = jwt.sign(
                 { user: censorUser((req as any).user) },
-                process.env.SPK!,
+                getJwtSecret(),
                 { expiresIn: -1 },
             );
             res.cookie("auth", token, { path: "/" });
@@ -562,12 +563,12 @@ export class Spire extends EventEmitter {
 
                 const token = jwt.sign(
                     { user: censorUser(userEntry) },
-                    process.env.SPK!,
+                    getJwtSecret(),
                     { expiresIn: JWT_EXPIRY },
                 );
 
                 // just to make sure
-                jwt.verify(token, process.env.SPK!);
+                jwt.verify(token, getJwtSecret());
 
                 res.cookie("auth", token, { path: "/" });
                 res.send(

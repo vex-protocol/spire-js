@@ -29,6 +29,7 @@ import { getUserRouter } from "./user.ts";
 import * as uuid from "uuid";
 import { POWER_LEVELS } from "../ClientManager.ts";
 import { JWT_EXPIRY } from "../Spire.ts";
+import { getJwtSecret } from "../utils/jwtSecret.ts";
 import type { IUser } from "@vex-chat/types";
 import { censorUser } from "./utils.ts";
 
@@ -51,7 +52,7 @@ interface IInvitePayload {
 const checkAuth = (req: any, res: any, next: () => void) => {
     if (req.cookies.auth) {
         try {
-            const result = jwt.verify(req.cookies.auth, process.env.SPK!);
+            const result = jwt.verify(req.cookies.auth, getJwtSecret());
 
             // lol glad this is a try/catch block
             (req as any).user = (result as any).user;
@@ -66,7 +67,7 @@ const checkAuth = (req: any, res: any, next: () => void) => {
 const checkDevice = (req: any, res: any, next: () => void) => {
     if (req.cookies.device) {
         try {
-            const result = jwt.verify(req.cookies.device, process.env.SPK!);
+            const result = jwt.verify(req.cookies.device, getJwtSecret());
             // lol glad this is a try/catch block
             (req as any).device = (result as any).device;
         } catch (err) {
@@ -518,10 +519,10 @@ export const initApp = (
             regKey &&
             tokenValidator(uuid.stringify(regKey), TokenScopes.Connect)
         ) {
-            const token = jwt.sign({ device }, process.env.SPK!, {
+            const token = jwt.sign({ device }, getJwtSecret(), {
                 expiresIn: JWT_EXPIRY,
             });
-            jwt.verify(token, process.env.SPK!);
+            jwt.verify(token, getJwtSecret());
 
             res.cookie("device", token, { path: "/" });
             res.sendStatus(200);
