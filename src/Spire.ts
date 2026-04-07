@@ -98,6 +98,8 @@ export class Spire extends EventEmitter {
     private readonly version = getAppVersion();
     private readonly commitSha = getCommitSha();
     private requestsTotal = 0;
+    private requestsTotalLoaded = false;
+    private queuedRequestIncrements = 0;
     private dbReady = false;
 
     private expWs: expressWs.Instance = expressWs(express());
@@ -119,6 +121,9 @@ export class Spire extends EventEmitter {
         this.db = new Database(options);
         this.db.on("ready", () => {
             this.dbReady = true;
+            this.bootstrapRequestCounter().catch((err) => {
+                this.log.error("Failed to load persisted request counter: " + err);
+            });
         });
 
         this.log = createLogger("spire", options?.logLevel || "error");
@@ -221,6 +226,17 @@ export class Spire extends EventEmitter {
     private init(apiPort: number): void {
         this.api.use((_req, _res, next) => {
             this.requestsTotal += 1;
+
+            if (!this.requestsTotalLoaded) {
+                this.queuedRequestIncrements += 1;
+            } else {
+                this.db.incrementRequestsTotal(1).catch((err) => {
+                    this.log.warn(
+                        "Failed to persist request counter increment: " + err,
+                    );
+                });
+            }
+
             next();
         });
 
@@ -605,5 +621,16 @@ export class Spire extends EventEmitter {
         this.server = this.api.listen(apiPort, () => {
             this.log.info("API started on port " + apiPort.toString());
         });
+    }
+
+    private async bootstrapRequestCounter(): Promise<void> {
+        const persistedTotal = await this.db.getRequestsTotal();
+        const startupIncrements = this.queuedRequestIncrements;
+        this.queuedRequestIncrements = 0;
+        this.requestsTotal = persistedTotal + startupIncrements;
+        if (startupIncrements > 0) {
+            await this.db.incrementRequestsTotal(startupIncrements);
+        }
+        this.requestsTotalLoaded = true;
     }
 }

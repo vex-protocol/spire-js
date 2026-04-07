@@ -11,6 +11,7 @@ files
 avatars
 emoji
 *.sqlite
+*.sqlite-*
 .yalc
 yalc.lock
 .claude
