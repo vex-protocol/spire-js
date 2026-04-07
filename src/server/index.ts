@@ -5,7 +5,7 @@ import { TokenScopes } from "@vex-chat/types";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
-import expressWs from "express-ws";
+// express-ws removed — WS auth is post-connection (ADR-006)
 
 import helmet from "helmet";
 import morgan from "morgan";
@@ -105,7 +105,7 @@ for (const dir of directories) {
 }
 
 export const initApp = (
-    api: expressWs.Application,
+    api: express.Application,
     db: Database,
     log: winston.Logger,
     tokenValidator: (key: string, scope: TokenScopes) => boolean,
