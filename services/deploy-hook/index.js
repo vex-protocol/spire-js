@@ -17,7 +17,9 @@ function stripAnsi(text) {
     if (!text) {
         return text;
     }
-    return text.replace(/\u001b\[[\d;?]*[\dA-Za-z]/g, "").replace(/\u001b][\d;]*[^\u0007]*\u0007/g, "");
+    return text
+        .replace(/\u001b\[[\d;?]*[\dA-Za-z]/g, "")
+        .replace(/\u001b][\d;]*[^\u0007]*\u0007/g, "");
 }
 
 function childProcessEnv() {
@@ -68,9 +70,7 @@ function getProvidedSecret(req) {
         return headerSecret;
     }
     const auth = req.headers.authorization;
-    const bearer = extractBearer(
-        Array.isArray(auth) ? auth[0] : auth ?? "",
-    );
+    const bearer = extractBearer(Array.isArray(auth) ? auth[0] : (auth ?? ""));
     if (bearer) {
         return bearer;
     }
@@ -209,9 +209,7 @@ async function runDeploy({ repoRoot, gitRef, pm2App }) {
                 ? `${(memKb / 1024 / 1024).toFixed(1)} MiB`
                 : "?";
         const cpu =
-            typeof app.monit?.cpu === "number"
-                ? `${app.monit.cpu}%`
-                : "?";
+            typeof app.monit?.cpu === "number" ? `${app.monit.cpu}%` : "?";
         const status = app.pm2_env?.status ?? "?";
         const pid = app.pid ?? "?";
         const restarts = app.pm2_env?.restart_time ?? "?";
@@ -220,9 +218,7 @@ async function runDeploy({ repoRoot, gitRef, pm2App }) {
             typeof startedMs === "number"
                 ? `${Math.max(0, Math.floor((Date.now() - startedMs) / 1000))}s`
                 : "?";
-        return (
-            `${name}: status=${status} pid=${pid} cpu=${cpu} mem=${mem} uptime=${uptime} restarts=${restarts}\n`
-        );
+        return `${name}: status=${status} pid=${pid} cpu=${cpu} mem=${mem} uptime=${uptime} restarts=${restarts}\n`;
     }
 
     /**

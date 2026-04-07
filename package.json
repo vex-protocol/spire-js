@@ -14,7 +14,11 @@
         "start:built": "node ./dist/run.js",
         "restart": "pm2 restart spire && pm2 logs spire",
         "build": "tsc",
-        "format": "prettier '**/*.{ts,tsx,json,md}' --tab-width 4 --write",
+        "format": "prettier --write .",
+        "format:check": "prettier --check .",
+        "lint": "eslint src/",
+        "lint:fix": "eslint src/ --fix",
+        "prepare": "husky",
         "test": "vitest run",
         "gen-spk": "node scripts/gen-spk.js",
         "docs": "node ./scripts/generate-docs.js",
@@ -38,10 +42,22 @@
         "@types/ws": "^8.5.10",
         "@vex-chat/crypto": "1.1.0-rc.1",
         "@vex-chat/types": "^1.0.0-rc.1",
+        "@typescript-eslint/eslint-plugin": "^8.57.1",
+        "@typescript-eslint/parser": "^8.57.1",
+        "eslint": "^10.1.0",
+        "eslint-config-prettier": "^9.0.0",
+        "husky": "^9.1.7",
+        "lint-staged": "^16.3.2",
         "prettier": "^3.2.0",
         "typedoc": "^0.28.18",
         "typescript": "^6.0.2",
         "vitest": "^3.0.0"
+    },
+    "lint-staged": {
+        "*.ts": [
+            "eslint --fix",
+            "prettier --write"
+        ]
     },
     "overrides": {
         "@types/express": "^4.17.21",
