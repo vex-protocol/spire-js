@@ -347,6 +347,7 @@ function getTimeseriesBuckets(db, windowHours, bucketMinutes) {
             latencies: [],
             requestsTotalMin: null,
             requestsTotalMax: null,
+            samples: [],
         });
     }
 
@@ -361,11 +362,16 @@ function getTimeseriesBuckets(db, windowHours, bucketMinutes) {
             continue;
         }
         bucket.sampleCount += 1;
-        if (Boolean(row.ok)) {
+        const sampleOk = Boolean(row.ok);
+        if (sampleOk) {
             bucket.upCount += 1;
         } else {
             bucket.downCount += 1;
         }
+        bucket.samples.push({
+            sampledAt: row.sampled_at,
+            ok: sampleOk,
+        });
         if (typeof row.request_latency_ms === "number") {
             bucket.latencies.push(row.request_latency_ms);
         }
@@ -434,6 +440,8 @@ function getTimeseriesBuckets(db, windowHours, bucketMinutes) {
             p95LatencyMs,
             maxLatencyMs,
             status,
+            samples: bucket.samples,
+            sampleTimestamps: bucket.samples.map((sample) => sample.sampledAt),
         };
     });
 
