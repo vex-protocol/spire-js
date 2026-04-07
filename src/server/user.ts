@@ -9,7 +9,8 @@ import { protect } from "./index.ts";
 
 import { msgpack } from "../utils/msgpack.ts";
 import { Database } from "../Database.ts";
-import { censorUser, type ICensoredUser } from "./utils.ts";
+import type { IUser } from "@vex-chat/types";
+import { censorUser } from "./utils.ts";
 
 export const getUserRouter = (
     db: Database,
@@ -24,7 +25,7 @@ export const getUserRouter = (
         if (user) {
             return res.send(msgpack.encode(censorUser(user)));
         } else {
-            res.sendStatus(404);
+            return res.sendStatus(404);
         }
     });
 
@@ -34,7 +35,7 @@ export const getUserRouter = (
     });
 
     router.get("/:id/permissions", protect, async (req, res) => {
-        const userDetails: ICensoredUser = (req as any).user;
+        const userDetails: IUser = (req as any).user;
         try {
             const permissions = await db.retrievePermissions(
                 userDetails.userID,
@@ -47,7 +48,7 @@ export const getUserRouter = (
     });
 
     router.get("/:id/servers", protect, async (req, res) => {
-        const userDetails: ICensoredUser = (req as any).user;
+        const userDetails: IUser = (req as any).user;
         const servers = await db.retrieveServers(userDetails.userID);
         res.send(msgpack.encode(servers));
     });
@@ -59,7 +60,7 @@ export const getUserRouter = (
             res.sendStatus(404);
             return;
         }
-        const userDetails = (req as any).user as ICensoredUser;
+        const userDetails = (req as any).user as IUser;
         if (userDetails.userID !== device.owner) {
             res.sendStatus(401);
             return;

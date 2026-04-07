@@ -11,6 +11,7 @@ import type {
     IRespMsg,
     ISucessMsg,
     IUser,
+    IUserRecord,
 } from "@vex-chat/types";
 import { SocketAuthErrors } from "@vex-chat/types";
 import chalk from "chalk";
@@ -26,7 +27,6 @@ import winston from "winston";
 import WebSocket from "ws";
 
 import { Database } from "./Database.ts";
-import type { ICensoredUser } from "./server/utils.ts";
 import { TOKEN_EXPIRY, type ISpireOptions } from "./Spire.ts";
 import { createLogger } from "./utils/createLogger.ts";
 import { createUint8UUID } from "./utils/createUint8UUID.ts";
@@ -66,8 +66,8 @@ export class ClientManager extends EventEmitter {
     private challengeID: Uint8Array = createUint8UUID();
     private failed: boolean = false;
     private db: Database;
-    private user: IUser | null;
-    private userDetails: ICensoredUser;
+    private user: IUserRecord | null;
+    private userDetails: IUser;
     private device: IDevice | null;
     private log: winston.Logger;
     private notify: (
@@ -82,7 +82,7 @@ export class ClientManager extends EventEmitter {
         ws: WebSocket,
         db: Database,
         notify: (userID: string, event: string, transmissionID: string) => void,
-        userDetails: ICensoredUser,
+        userDetails: IUser,
         options?: ISpireOptions,
     ) {
         super();
@@ -98,14 +98,14 @@ export class ClientManager extends EventEmitter {
         this.challenge();
     }
 
-    public toString() {
+    public override toString() {
         if (!this.user || !this.device) {
             return "Unauthorized#0000";
         }
         return this.user.username + "<" + this.getDevice().deviceID + ">";
     }
 
-    public getUser(): IUser {
+    public getUser(): IUserRecord {
         if (!this.authed) {
             throw new Error("You must be authed before getting user info.");
         }

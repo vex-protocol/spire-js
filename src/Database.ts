@@ -15,20 +15,100 @@ import type {
     IRegistrationPayload,
     IServer,
     IUser,
+    IUserRecord,
 } from "@vex-chat/types";
 import { EventEmitter } from "events";
 import { pbkdf2Sync } from "node:crypto";
-import knex, { type Knex } from "knex";
+import * as fs from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+import BetterSqlite3 from "better-sqlite3";
+import {
+    Kysely,
+    Migrator,
+    SqliteDialect,
+    sql,
+    type Migration,
+    type MigrationProvider,
+} from "kysely";
 import * as uuid from "uuid";
 import winston from "winston";
+
+import type { ServerDatabase } from "./db/schema.ts";
 import type { ISpireOptions } from "./Spire.ts";
 import { createLogger } from "./utils/createLogger.ts";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// On Windows, dynamic import() needs file:// URLs, not bare paths like "D:\...".
+// pathToFileURL handles this cross-platform.
+const migrationFolder = path.join(__dirname, "migrations");
 
 const pubkeyRegex = /[0-9a-f]{64}/;
 export const ITERATIONS = 1000;
 
+// ── Row-to-interface converters ─────────────────────────────────────────
+// SQLite stores booleans as integers and dates as strings, but the
+// @vex-chat/types interfaces expect boolean / Date.
+
+function toUserRecord(row: {
+    userID: string;
+    username: string;
+    passwordHash: string;
+    passwordSalt: string;
+    lastSeen: string;
+}): IUserRecord {
+    return { ...row, lastSeen: new Date(row.lastSeen) };
+}
+
+function toDevice(row: {
+    deviceID: string;
+    signKey: string;
+    owner: string;
+    name: string;
+    lastLogin: string;
+    deleted: number;
+}): IDevice {
+    return { ...row, deleted: Boolean(row.deleted) };
+}
+
+function toServer(row: {
+    serverID: string;
+    name: string;
+    icon: string | null;
+}): IServer {
+    return {
+        serverID: row.serverID,
+        name: row.name,
+        icon: row.icon ?? undefined,
+    };
+}
+
+function toMailSQL(row: {
+    nonce: string;
+    recipient: string;
+    mailID: string;
+    sender: string;
+    header: string;
+    cipher: string;
+    group: string | null;
+    extra: string | null;
+    mailType: number;
+    time: string;
+    forward: number;
+    authorID: string;
+    readerID: string;
+}): IMailSQL {
+    return {
+        ...row,
+        extra: row.extra ?? "",
+        time: new Date(row.time),
+        forward: Boolean(row.forward),
+    };
+}
+
 export class Database extends EventEmitter {
-    private db: Knex;
+    private db: Kysely<ServerDatabase>;
     private log: winston.Logger;
 
     constructor(options?: ISpireOptions) {
@@ -36,39 +116,36 @@ export class Database extends EventEmitter {
 
         this.log = createLogger("spire-db", options?.logLevel || "error");
 
-        switch (options?.dbType || "mysql") {
+        const dbType = options?.dbType || "mysql";
+
+        let filename: string;
+        switch (dbType) {
             case "sqlite3":
             case "sqlite":
-                this.db = knex({
-                    client: "better-sqlite3",
-                    connection: {
-                        filename: "spire.sqlite",
-                    },
-                    useNullAsDefault: true,
-                });
+                filename = "spire.sqlite";
                 break;
             case "sqlite3mem":
-                this.db = knex({
-                    client: "better-sqlite3",
-                    connection: {
-                        filename: ":memory:",
-                    },
-                    useNullAsDefault: true,
-                });
+                filename = ":memory:";
                 break;
             case "mysql":
             default:
-                this.db = knex({
-                    client: "mysql",
-                    connection: {
-                        host: process.env.SQL_HOST,
-                        user: process.env.SQL_USER,
-                        password: process.env.SQL_PASSWORD,
-                        database: process.env.SQL_DB_NAME,
-                    },
-                });
+                // For now, fall through to SQLite for mysql too.
+                // MySQL dialect can be wired up later with MysqlDialect + mysql2 createPool.
+                filename = "spire.sqlite";
                 break;
         }
+
+        const sqliteDb = new BetterSqlite3(filename);
+        sqliteDb.pragma("journal_mode = WAL");
+        sqliteDb.pragma("synchronous = NORMAL");
+        sqliteDb.pragma("busy_timeout = 5000");
+        sqliteDb.pragma("cache_size = -64000");
+        sqliteDb.pragma("temp_store = memory");
+        sqliteDb.pragma("foreign_keys = ON");
+
+        this.db = new Kysely<ServerDatabase>({
+            dialect: new SqliteDialect({ database: sqliteDb }),
+        });
 
         this.init();
     }
@@ -87,17 +164,16 @@ export class Database extends EventEmitter {
                 signature: XUtils.encodeHex(otk.signature),
                 index: otk.index!,
             };
-            await this.db("oneTimeKeys").insert(newOTK);
+            await this.db.insertInto("oneTimeKeys").values(newOTK).execute();
         }
     }
 
     public async getPreKeys(deviceID: string): Promise<IPreKeysWS | null> {
         const rows: IPreKeysSQL[] = await this.db
-            .from("preKeys")
-            .select()
-            .where({
-                deviceID,
-            });
+            .selectFrom("preKeys")
+            .selectAll()
+            .where("deviceID", "=", deviceID)
+            .execute();
         if (rows.length === 0) {
             return null;
         }
@@ -111,8 +187,9 @@ export class Database extends EventEmitter {
         return preKey;
     }
 
-    public async retrieveUsers(): Promise<IUser[]> {
-        return this.db.from("users").select();
+    public async retrieveUsers(): Promise<IUserRecord[]> {
+        const rows = await this.db.selectFrom("users").selectAll().execute();
+        return rows.map(toUserRecord);
     }
 
     public async getKeyBundle(deviceID: string): Promise<IKeyBundle | null> {
@@ -143,10 +220,10 @@ export class Database extends EventEmitter {
             deviceID: uuid.v4(),
             name: payload.deviceName,
             lastLogin: new Date(Date.now()).toString(),
-            deleted: false,
+            deleted: 0,
         };
 
-        await this.db("devices").insert(device);
+        await this.db.insertInto("devices").values(device).execute();
 
         const medPreKeys: IPreKeysSQL = {
             keyID: uuid.v4(),
@@ -157,63 +234,78 @@ export class Database extends EventEmitter {
             index: payload.preKeyIndex,
         };
 
-        await this.db("preKeys").insert(medPreKeys);
+        await this.db.insertInto("preKeys").values(medPreKeys).execute();
 
-        return device;
+        return toDevice(device);
     }
 
     public async deleteDevice(deviceID: string): Promise<void> {
-        await this.db.from("preKeys").where({ deviceID }).del();
+        await this.db
+            .deleteFrom("preKeys")
+            .where("deviceID", "=", deviceID)
+            .execute();
 
-        await this.db.from("oneTimeKeys").where({ deviceID }).del();
+        await this.db
+            .deleteFrom("oneTimeKeys")
+            .where("deviceID", "=", deviceID)
+            .execute();
 
-        return this.db
-            .from("devices")
-            .where({ deviceID })
-            .update({ deleted: true });
+        await this.db
+            .updateTable("devices")
+            .set({ deleted: 1 })
+            .where("deviceID", "=", deviceID)
+            .execute();
     }
 
     public async retrieveDevice(deviceID: string): Promise<IDevice | null> {
         if (uuid.validate(deviceID)) {
             const rows = await this.db
-                .from("devices")
-                .select()
-                .where({ deviceID, deleted: false });
+                .selectFrom("devices")
+                .selectAll()
+                .where("deviceID", "=", deviceID)
+                .where("deleted", "=", 0)
+                .execute();
 
             if (rows.length === 0) {
                 return null;
             }
             const [device] = rows;
-            return device;
+            return toDevice(device);
         }
         if (pubkeyRegex.test(deviceID)) {
             const rows = await this.db
-                .from("devices")
-                .select()
-                .where({ signKey: deviceID, deleted: false });
+                .selectFrom("devices")
+                .selectAll()
+                .where("signKey", "=", deviceID)
+                .where("deleted", "=", 0)
+                .execute();
             if (rows.length === 0) {
                 return null;
             }
             const [device] = rows;
-            return device;
+            return toDevice(device);
         }
         return null;
     }
 
     public async retrieveUserDeviceList(userIDs: string[]): Promise<IDevice[]> {
-        return this.db
-            .from("devices")
-            .select()
-            .whereIn("owner", userIDs)
-            .andWhere({ deleted: false });
+        const rows = await this.db
+            .selectFrom("devices")
+            .selectAll()
+            .where("owner", "in", userIDs)
+            .where("deleted", "=", 0)
+            .execute();
+        return rows.map(toDevice);
     }
 
     public async getOTK(deviceID: string): Promise<IPreKeysWS | null> {
-        const rows: IPreKeysSQL[] = await this.db("oneTimeKeys")
-            .select()
-            .where({ deviceID })
+        const rows: IPreKeysSQL[] = await this.db
+            .selectFrom("oneTimeKeys")
+            .selectAll()
+            .where("deviceID", "=", deviceID)
+            .orderBy("index")
             .limit(1)
-            .orderBy("index");
+            .execute();
         if (rows.length === 0) {
             return null;
         }
@@ -228,9 +320,10 @@ export class Database extends EventEmitter {
         try {
             // delete the otk
             await this.db
-                .from("oneTimeKeys")
-                .delete()
-                .where({ deviceID, index: otk.index });
+                .deleteFrom("oneTimeKeys")
+                .where("deviceID", "=", deviceID)
+                .where("index", "=", otk.index)
+                .execute();
             return otk;
         } catch (err) {
             throw err;
@@ -238,11 +331,12 @@ export class Database extends EventEmitter {
     }
 
     public async getOTKCount(deviceID: string): Promise<number> {
-        const keys = await this.db
-            .from("oneTimeKeys")
-            .select()
-            .where({ deviceID });
-        return keys.length;
+        const result = await this.db
+            .selectFrom("oneTimeKeys")
+            .select((eb) => eb.fn.countAll().as("count"))
+            .where("deviceID", "=", deviceID)
+            .executeTakeFirst();
+        return Number(result?.count ?? 0);
     }
 
     public async createPermission(
@@ -255,9 +349,11 @@ export class Database extends EventEmitter {
 
         // check if it already exists
         const checkPermission = await this.db
-            .from("permissions")
-            .select()
-            .where({ userID, resourceID });
+            .selectFrom("permissions")
+            .selectAll()
+            .where("userID", "=", userID)
+            .where("resourceID", "=", resourceID)
+            .execute();
         if (checkPermission.length > 0) {
             return checkPermission[0];
         }
@@ -270,12 +366,16 @@ export class Database extends EventEmitter {
             powerLevel,
         };
 
-        await this.db("permissions").insert(permission);
+        await this.db.insertInto("permissions").values(permission).execute();
         return permission;
     }
 
     public async retrieveInvite(inviteID: string): Promise<IInvite | null> {
-        const rows = await this.db.from("invites").select().where({ inviteID });
+        const rows = await this.db
+            .selectFrom("invites")
+            .selectAll()
+            .where("inviteID", "=", inviteID)
+            .execute();
         if (rows.length === 0) {
             return null;
         }
@@ -283,7 +383,11 @@ export class Database extends EventEmitter {
     }
 
     public async retrieveServerInvites(serverID: string): Promise<IInvite[]> {
-        const rows = await this.db.from("invites").select().where({ serverID });
+        const rows = await this.db
+            .selectFrom("invites")
+            .selectAll()
+            .where("serverID", "=", serverID)
+            .execute();
 
         return rows.filter((invite: IInvite) => {
             const valid =
@@ -299,7 +403,10 @@ export class Database extends EventEmitter {
     }
 
     public async deleteInvite(inviteID: string): Promise<void> {
-        await this.db.from("invites").where({ inviteID }).delete();
+        await this.db
+            .deleteFrom("invites")
+            .where("inviteID", "=", inviteID)
+            .execute();
     }
 
     public async createInvite(
@@ -315,21 +422,24 @@ export class Database extends EventEmitter {
             expiration,
         };
 
-        await this.db("invites").insert(invite);
+        await this.db.insertInto("invites").values(invite).execute();
         return invite;
     }
 
-    public async retrieveGroupMembers(channelID: string): Promise<IUser[]> {
+    public async retrieveGroupMembers(
+        channelID: string,
+    ): Promise<IUserRecord[]> {
         const channel = await this.retrieveChannel(channelID);
         if (!channel) {
             return [];
         }
         const permissions: IPermission[] = await this.db
-            .from("permissions")
-            .select()
-            .where({ resourceID: channel.serverID });
+            .selectFrom("permissions")
+            .selectAll()
+            .where("resourceID", "=", channel.serverID)
+            .execute();
 
-        const groupMembers: IUser[] = [];
+        const groupMembers: IUserRecord[] = [];
         for (const permission of permissions) {
             const user = await this.retrieveUser(permission.userID);
             if (user) {
@@ -342,10 +452,11 @@ export class Database extends EventEmitter {
 
     public async retrieveChannel(channelID: string): Promise<IChannel | null> {
         const channels: IChannel[] = await this.db
-            .from("channels")
-            .select()
-            .where({ channelID })
-            .limit(1);
+            .selectFrom("channels")
+            .selectAll()
+            .where("channelID", "=", channelID)
+            .limit(1)
+            .execute();
 
         if (channels.length === 0) {
             return null;
@@ -355,9 +466,10 @@ export class Database extends EventEmitter {
 
     public async retrieveChannels(serverID: string): Promise<IChannel[]> {
         const channels: IChannel[] = await this.db
-            .from("channels")
-            .select()
-            .where({ serverID });
+            .selectFrom("channels")
+            .selectAll()
+            .where("serverID", "=", serverID)
+            .execute();
         return channels;
     }
 
@@ -370,7 +482,7 @@ export class Database extends EventEmitter {
             serverID,
             name,
         };
-        await this.db("channels").insert(channel);
+        await this.db.insertInto("channels").values(channel).execute();
         return channel;
     }
 
@@ -380,7 +492,14 @@ export class Database extends EventEmitter {
             name,
             serverID: uuid.v4(),
         };
-        await this.db("servers").insert(server);
+        await this.db
+            .insertInto("servers")
+            .values({
+                serverID: server.serverID,
+                name: server.name,
+                icon: server.icon ?? null,
+            })
+            .execute();
         // create the admin permission
         await this.createPermission(ownerID, "server", server.serverID, 100);
         // create the general channel
@@ -394,11 +513,13 @@ export class Database extends EventEmitter {
      *
      * @param resourceID
      */
-    public async retrieveAffectedUsers(resourceID: string): Promise<IUser[]> {
+    public async retrieveAffectedUsers(
+        resourceID: string,
+    ): Promise<IUserRecord[]> {
         const permissionList =
             await this.retrievePermissionsByResourceID(resourceID);
 
-        const users: IUser[] = [];
+        const users: IUserRecord[] = [];
         for (const permission of permissionList) {
             const user = await this.retrieveUser(permission.userID);
             if (user) {
@@ -412,7 +533,11 @@ export class Database extends EventEmitter {
     public async retrievePermissionsByResourceID(
         resourceID: string,
     ): Promise<IPermission[]> {
-        return this.db.from("permissions").select().where({ resourceID });
+        return this.db
+            .selectFrom("permissions")
+            .selectAll()
+            .where("resourceID", "=", resourceID)
+            .execute();
     }
 
     public async retrievePermissions(
@@ -421,46 +546,56 @@ export class Database extends EventEmitter {
     ): Promise<IPermission[]> {
         if (resourceType === "all") {
             const sList = await this.db
-                .from("permissions")
-                .select()
-                .where({ userID });
+                .selectFrom("permissions")
+                .selectAll()
+                .where("userID", "=", userID)
+                .execute();
             return sList;
         }
         const serverList = await this.db
-            .from("permissions")
-            .select()
-            .where({ userID, resourceType });
+            .selectFrom("permissions")
+            .selectAll()
+            .where("userID", "=", userID)
+            .where("resourceType", "=", resourceType)
+            .execute();
         return serverList;
     }
 
     public async retrieveServer(serverID: string): Promise<IServer | null> {
         const rows = await this.db
-            .from("servers")
-            .select()
-            .where({ serverID })
-            .limit(1);
+            .selectFrom("servers")
+            .selectAll()
+            .where("serverID", "=", serverID)
+            .limit(1)
+            .execute();
         if (rows.length === 0) {
             return null;
         }
-        const server: IServer = rows[0];
-        return server;
+        return toServer(rows[0]);
     }
 
     public async deletePermissions(resourceID: string): Promise<void> {
-        await this.db.from("permissions").where({ resourceID }).delete();
+        await this.db
+            .deleteFrom("permissions")
+            .where("resourceID", "=", resourceID)
+            .execute();
     }
 
     public async deletePermission(permissionID: string): Promise<void> {
-        await this.db.from("permissions").where({ permissionID }).delete();
+        await this.db
+            .deleteFrom("permissions")
+            .where("permissionID", "=", permissionID)
+            .execute();
     }
 
     public async retrievePermission(
         permissionID: string,
     ): Promise<IPermission | null> {
         const rows = await this.db
-            .from("permissions")
-            .where({ permissionID })
-            .select();
+            .selectFrom("permissions")
+            .selectAll()
+            .where("permissionID", "=", permissionID)
+            .execute();
 
         if (rows.length === 0) {
             return null;
@@ -471,24 +606,41 @@ export class Database extends EventEmitter {
 
     public async deleteChannel(channelID: string): Promise<void> {
         await this.deletePermissions(channelID);
-        await this.db.from("mail").where({ group: channelID }).delete();
-        await this.db.from("channels").where({ channelID }).delete();
+        await this.db
+            .deleteFrom("mail")
+            .where("group", "=", channelID)
+            .execute();
+        await this.db
+            .deleteFrom("channels")
+            .where("channelID", "=", channelID)
+            .execute();
     }
 
     public async createEmoji(emoji: IEmoji): Promise<void> {
-        await this.db("emojis").insert(emoji);
+        await this.db.insertInto("emojis").values(emoji).execute();
     }
 
     public async deleteEmoji(emojiID: string): Promise<void> {
-        await this.db.from("emojis").where({ emojiID }).del();
+        await this.db
+            .deleteFrom("emojis")
+            .where("emojiID", "=", emojiID)
+            .execute();
     }
 
     public async retrieveEmojiList(userID: string): Promise<IEmoji[]> {
-        return this.db.from("emojis").select().where({ owner: userID });
+        return this.db
+            .selectFrom("emojis")
+            .selectAll()
+            .where("owner", "=", userID)
+            .execute();
     }
 
     public async retrieveEmoji(emojiID: string): Promise<IEmoji | null> {
-        const rows = await this.db.from("emojis").select().where({ emojiID });
+        const rows = await this.db
+            .selectFrom("emojis")
+            .selectAll()
+            .where("emojiID", "=", emojiID)
+            .execute();
         if (rows.length === 0) {
             return null;
         }
@@ -501,7 +653,10 @@ export class Database extends EventEmitter {
         for (const channel of channels) {
             await this.deleteChannel(channel.channelID);
         }
-        await this.db.from("servers").where({ serverID }).delete();
+        await this.db
+            .deleteFrom("servers")
+            .where("serverID", "=", serverID)
+            .execute();
     }
 
     public async retrieveServers(userID: string): Promise<IServer[]> {
@@ -522,12 +677,12 @@ export class Database extends EventEmitter {
     public async createUser(
         regKey: Uint8Array,
         regPayload: IRegistrationPayload,
-    ): Promise<[IUser | null, Error | null]> {
+    ): Promise<[IUserRecord | null, Error | null]> {
         try {
             const salt = xMakeNonce();
             const passwordHash = hashPassword(regPayload.password, salt);
 
-            const user: IUser = {
+            const user: IUserRecord = {
                 userID: uuid.stringify(regKey),
                 username: regPayload.username,
                 lastSeen: new Date(Date.now()),
@@ -535,7 +690,13 @@ export class Database extends EventEmitter {
                 passwordSalt: XUtils.encodeHex(salt),
             };
 
-            await this.db("users").insert(user);
+            await this.db
+                .insertInto("users")
+                .values({
+                    ...user,
+                    lastSeen: user.lastSeen.toString(),
+                })
+                .execute();
             await this.createDevice(user.userID, regPayload);
 
             return [user, null];
@@ -545,11 +706,15 @@ export class Database extends EventEmitter {
     }
 
     public async createFile(file: IFileSQL): Promise<void> {
-        return this.db("files").insert(file);
+        await this.db.insertInto("files").values(file).execute();
     }
 
     public async retrieveFile(fileID: string): Promise<IFileSQL | null> {
-        const file = await this.db.from("files").select().where({ fileID });
+        const file = await this.db
+            .selectFrom("files")
+            .selectAll()
+            .where("fileID", "=", fileID)
+            .execute();
         if (file.length === 0) {
             return null;
         }
@@ -557,27 +722,30 @@ export class Database extends EventEmitter {
     }
 
     // the identifier can be username, public key, or userID
-    public async retrieveUser(userIdentifier: string): Promise<IUser | null> {
-        let rows: IUser[] = [];
+    public async retrieveUser(
+        userIdentifier: string,
+    ): Promise<IUserRecord | null> {
+        let rows;
         if (uuid.validate(userIdentifier)) {
             rows = await this.db
-                .from("users")
-                .select()
-                .where({ userID: userIdentifier })
-                .limit(1);
+                .selectFrom("users")
+                .selectAll()
+                .where("userID", "=", userIdentifier)
+                .limit(1)
+                .execute();
         } else {
             rows = await this.db
-                .from("users")
-                .select()
-                .where({ username: userIdentifier })
-                .limit(1);
+                .selectFrom("users")
+                .selectAll()
+                .where("username", "=", userIdentifier)
+                .limit(1)
+                .execute();
         }
 
         if (rows.length === 0) {
             return null;
         }
-        const [user] = rows;
-        return user;
+        return toUserRecord(rows[0]);
     }
 
     public async saveMail(
@@ -602,17 +770,26 @@ export class Database extends EventEmitter {
             readerID: mail.readerID,
         };
 
-        await this.db("mail").insert(entry);
+        await this.db
+            .insertInto("mail")
+            .values({
+                ...entry,
+                time: entry.time.toString(),
+                forward: entry.forward ? 1 : 0,
+            })
+            .execute();
     }
 
     public async retrieveMail(
         deviceID: string,
         // tslint:disable-next-line: array-type
     ): Promise<[Uint8Array, IMailWS, Date][]> {
-        const rows: IMailSQL[] = await this.db
-            .from("mail")
-            .select()
-            .where({ recipient: deviceID });
+        const rawRows = await this.db
+            .selectFrom("mail")
+            .selectAll()
+            .where("recipient", "=", deviceID)
+            .execute();
+        const rows: IMailSQL[] = rawRows.map(toMailSQL);
 
         const fixMail: (mail: IMailSQL) => [Uint8Array, IMailWS, Date] = (
             mail,
@@ -642,30 +819,31 @@ export class Database extends EventEmitter {
 
     public async deleteMail(nonce: Uint8Array, userID: string): Promise<void> {
         await this.db
-            .from("mail")
-            .delete()
-            .where({ nonce: XUtils.encodeHex(nonce), recipient: userID });
+            .deleteFrom("mail")
+            .where("nonce", "=", XUtils.encodeHex(nonce))
+            .where("recipient", "=", userID)
+            .execute();
     }
 
-    public async markUserSeen(user: IUser): Promise<void> {
-        await this.db("users")
-            .where({ userID: user.userID })
-            .update({
-                lastSeen: new Date(Date.now()),
-            });
+    public async markUserSeen(user: IUserRecord): Promise<void> {
+        await this.db
+            .updateTable("users")
+            .set({ lastSeen: new Date(Date.now()).toString() })
+            .where("userID", "=", user.userID)
+            .execute();
     }
 
     public async markDeviceLogin(device: IDevice): Promise<void> {
-        await this.db("devices")
-            .where({ deviceID: device.deviceID })
-            .update({
-                lastLogin: new Date(Date.now()),
-            });
+        await this.db
+            .updateTable("devices")
+            .set({ lastLogin: new Date(Date.now()).toString() })
+            .where("deviceID", "=", device.deviceID)
+            .execute();
     }
 
     public async isHealthy(): Promise<boolean> {
         try {
-            await this.db.raw("select 1 as ok");
+            await sql`select 1 as ok`.execute(this.db);
             return true;
         } catch (err) {
             this.log.warn("Database health check failed: " + err);
@@ -674,10 +852,11 @@ export class Database extends EventEmitter {
     }
 
     public async getRequestsTotal(): Promise<number> {
-        const row = await this.db("service_metrics")
+        const row = await this.db
+            .selectFrom("service_metrics")
             .select("metric_value")
-            .where({ metric_key: "requests_total" })
-            .first();
+            .where("metric_key", "=", "requests_total")
+            .executeTakeFirst();
         const raw = row?.metric_value;
         const count = Number(raw);
         if (!Number.isFinite(count) || count < 0) {
@@ -690,11 +869,13 @@ export class Database extends EventEmitter {
         if (!Number.isFinite(by) || by <= 0) {
             return;
         }
-        await this.db("service_metrics")
-            .where({ metric_key: "requests_total" })
-            .update({
-                metric_value: this.db.raw("metric_value + ?", [Math.floor(by)]),
-            });
+        await this.db
+            .updateTable("service_metrics")
+            .set({
+                metric_value: sql`metric_value + ${Math.floor(by)}`,
+            })
+            .where("metric_key", "=", "requests_total")
+            .execute();
     }
 
     public async close(): Promise<void> {
@@ -703,161 +884,33 @@ export class Database extends EventEmitter {
     }
 
     private async init(): Promise<void> {
-        if (!(await this.db.schema.hasTable("invites"))) {
-            await this.db.schema.createTable(
-                "invites",
-                (table: Knex.CreateTableBuilder) => {
-                    table.string("inviteID").primary();
-                    table.string("serverID").index();
-                    table.string("owner");
-                    table.string("expiration");
-                },
-            );
+        // Custom migration provider that uses file:// URLs for dynamic import().
+        // FileMigrationProvider uses bare paths which break on Windows (D:\ is
+        // not a valid URL scheme for Node's ESM loader).
+        const provider: MigrationProvider = {
+            async getMigrations(): Promise<Record<string, Migration>> {
+                const files = await fs.readdir(migrationFolder);
+                const migrations: Record<string, Migration> = {};
+                for (const file of files) {
+                    if (!file.endsWith(".ts") && !file.endsWith(".js"))
+                        continue;
+                    const key = file.replace(/\.[tj]s$/, "");
+                    const fullPath = path.join(migrationFolder, file);
+                    const url = pathToFileURL(fullPath).href;
+                    migrations[key] = await import(url);
+                }
+                return migrations;
+            },
+        };
+        const migrator = new Migrator({
+            db: this.db,
+            provider,
+        });
+        const { error } = await migrator.migrateToLatest();
+        if (error) {
+            this.emit("error", error);
+            return;
         }
-
-        if (!(await this.db.schema.hasTable("users"))) {
-            await this.db.schema.createTable(
-                "users",
-                (table: Knex.CreateTableBuilder) => {
-                    table.string("userID").primary();
-                    table.string("username").unique();
-                    table.string("passwordHash");
-                    table.string("passwordSalt");
-                    table.dateTime("lastSeen");
-                },
-            );
-        }
-        if (!(await this.db.schema.hasTable("devices"))) {
-            await this.db.schema.createTable(
-                "devices",
-                (table: Knex.CreateTableBuilder) => {
-                    table.string("deviceID").primary();
-                    table.string("signKey").unique();
-                    table.string("owner");
-                    table.string("name");
-                    table.string("lastLogin");
-                    table.boolean("deleted");
-                },
-            );
-        }
-        if (!(await this.db.schema.hasTable("mail"))) {
-            await this.db.schema.createTable(
-                "mail",
-                (table: Knex.CreateTableBuilder) => {
-                    table.string("nonce").primary();
-                    table.string("recipient").index();
-                    table.string("mailID");
-                    table.string("sender");
-                    table.string("header");
-                    table.text("cipher", "mediumtext");
-                    table.string("group");
-                    table.text("extra");
-                    table.integer("mailType");
-                    table.dateTime("time");
-                    table.boolean("forward");
-                    table.string("authorID");
-                    table.string("readerID");
-                },
-            );
-        }
-        if (!(await this.db.schema.hasTable("preKeys"))) {
-            await this.db.schema.createTable(
-                "preKeys",
-                (table: Knex.CreateTableBuilder) => {
-                    table.string("keyID").primary();
-                    table.string("userID").index();
-                    table.string("deviceID").index().unique();
-                    table.string("publicKey");
-                    table.string("signature");
-                    table.integer("index");
-                },
-            );
-        }
-        if (!(await this.db.schema.hasTable("oneTimeKeys"))) {
-            await this.db.schema.createTable(
-                "oneTimeKeys",
-                (table: Knex.CreateTableBuilder) => {
-                    table.string("keyID").primary();
-                    table.string("userID").index();
-                    table.string("deviceID").index();
-                    table.string("publicKey");
-                    table.string("signature");
-                    table.integer("index");
-                },
-            );
-        }
-        if (!(await this.db.schema.hasTable("servers"))) {
-            await this.db.schema.createTable(
-                "servers",
-                (table: Knex.CreateTableBuilder) => {
-                    table.string("serverID").primary();
-                    table.string("name");
-                    table.string("icon");
-                },
-            );
-        }
-        if (!(await this.db.schema.hasTable("channels"))) {
-            await this.db.schema.createTable(
-                "channels",
-                (table: Knex.CreateTableBuilder) => {
-                    table.string("channelID").primary();
-                    table.string("serverID");
-                    table.string("name");
-                },
-            );
-        }
-        if (!(await this.db.schema.hasTable("permissions"))) {
-            await this.db.schema.createTable(
-                "permissions",
-                (table: Knex.CreateTableBuilder) => {
-                    table.string("permissionID").primary();
-                    table.string("userID").index();
-                    table.string("resourceType");
-                    table.string("resourceID").index();
-                    table.integer("powerLevel");
-                },
-            );
-        }
-
-        if (!(await this.db.schema.hasTable("files"))) {
-            await this.db.schema.createTable(
-                "files",
-                (table: Knex.CreateTableBuilder) => {
-                    table.string("fileID").primary();
-                    table.string("owner").index();
-                    table.string("nonce");
-                },
-            );
-        }
-
-        if (!(await this.db.schema.hasTable("emojis"))) {
-            await this.db.schema.createTable(
-                "emojis",
-                (table: Knex.CreateTableBuilder) => {
-                    table.string("emojiID").primary();
-                    table.string("owner").index();
-                    table.string("name");
-                },
-            );
-        }
-
-        if (!(await this.db.schema.hasTable("service_metrics"))) {
-            await this.db.schema.createTable(
-                "service_metrics",
-                (table: Knex.CreateTableBuilder) => {
-                    table.string("metric_key").primary();
-                    table.bigInteger("metric_value").notNullable().defaultTo(0);
-                },
-            );
-        }
-        await this.db("service_metrics")
-            .insert({
-                metric_key: "requests_total",
-                metric_value: 0,
-            })
-            .onConflict("metric_key")
-            .ignore();
-
         this.emit("ready");
     }
 }

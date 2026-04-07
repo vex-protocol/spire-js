@@ -12,7 +12,9 @@ const DEFAULT_API_HOST = "0.0.0.0";
 function parseArgs(argv) {
     const config = {
         url: process.env.STATUS_URL || DEFAULT_URL,
-        intervalMs: Number(process.env.STATUS_INTERVAL_MS || DEFAULT_INTERVAL_MS),
+        intervalMs: Number(
+            process.env.STATUS_INTERVAL_MS || DEFAULT_INTERVAL_MS,
+        ),
         dbPath: process.env.STATUS_DB_PATH || DEFAULT_DB_PATH,
         apiPort: Number(process.env.STATUS_API_PORT || DEFAULT_API_PORT),
         apiHost: process.env.STATUS_API_HOST || DEFAULT_API_HOST,
@@ -49,7 +51,11 @@ function parseArgs(argv) {
     if (!Number.isFinite(config.intervalMs) || config.intervalMs < 1_000) {
         throw new Error("Interval must be >= 1000ms.");
     }
-    if (!Number.isFinite(config.apiPort) || config.apiPort < 1 || config.apiPort > 65535) {
+    if (
+        !Number.isFinite(config.apiPort) ||
+        config.apiPort < 1 ||
+        config.apiPort > 65535
+    ) {
         throw new Error("Port must be between 1 and 65535.");
     }
 
@@ -127,14 +133,9 @@ async function collectOnce(targetUrl) {
                     : payload.withinLatencyBudget,
             requestsTotal: payload?.metrics?.requestsTotal ?? null,
             activeWebsocketClients: null,
-            dbReady:
-                payload?.dbReady ??
-                payload?.dependencies?.dbReady ??
-                null,
+            dbReady: payload?.dbReady ?? payload?.dependencies?.dbReady ?? null,
             dbHealthy:
-                payload?.dbHealthy ??
-                payload?.dependencies?.dbHealthy ??
-                null,
+                payload?.dbHealthy ?? payload?.dependencies?.dbHealthy ?? null,
             errorText: null,
             rawJson: payload ? JSON.stringify(payload) : null,
         };
@@ -209,8 +210,7 @@ function insertSample(db, sample) {
                   ? 1
                   : 0,
         dbReady: sample.dbReady === null ? null : sample.dbReady ? 1 : 0,
-        dbHealthy:
-            sample.dbHealthy === null ? null : sample.dbHealthy ? 1 : 0,
+        dbHealthy: sample.dbHealthy === null ? null : sample.dbHealthy ? 1 : 0,
     });
 }
 
@@ -218,7 +218,8 @@ function formatLog(sample) {
     const status = sample.ok ? "UP" : "DOWN";
     const code = sample.httpStatus ?? "ERR";
     const latency = `${sample.requestLatencyMs}ms`;
-    const reqs = sample.requestsTotal === null ? "-" : String(sample.requestsTotal);
+    const reqs =
+        sample.requestsTotal === null ? "-" : String(sample.requestsTotal);
     const err = sample.errorText ? ` error="${sample.errorText}"` : "";
     return `[${sample.sampledAt}] ${status} code=${code} latency=${latency} reqs=${reqs}${err}`;
 }
@@ -288,10 +289,12 @@ function getSummary(db, hours) {
         totalSamples,
         upSamples,
         downSamples: Math.max(0, totalSamples - upSamples),
-        uptimePercent: totalSamples === 0 ? 0 : (upSamples / totalSamples) * 100,
+        uptimePercent:
+            totalSamples === 0 ? 0 : (upSamples / totalSamples) * 100,
         averageLatencyMs:
             row?.avg_latency_ms === null ? null : Number(row.avg_latency_ms),
-        maxLatencyMs: row?.max_latency_ms === null ? null : Number(row.max_latency_ms),
+        maxLatencyMs:
+            row?.max_latency_ms === null ? null : Number(row.max_latency_ms),
         latest: getLatestSample(db),
     };
 }
@@ -313,7 +316,8 @@ function percentile(values, p) {
 function getTimeseriesBuckets(db, windowHours, bucketMinutes) {
     const windowStartMs = Date.now() - windowHours * 60 * 60 * 1000;
     const bucketMs = bucketMinutes * 60 * 1000;
-    const alignedWindowStartMs = Math.floor(windowStartMs / bucketMs) * bucketMs;
+    const alignedWindowStartMs =
+        Math.floor(windowStartMs / bucketMs) * bucketMs;
     const nowMs = Date.now();
 
     const rows = db
@@ -469,10 +473,7 @@ function startApiServer(db, host, port) {
                     "Access-Control-Allow-Headers",
                     "Content-Type, Authorization",
                 );
-                res.setHeader(
-                    "Access-Control-Allow-Methods",
-                    "GET, OPTIONS",
-                );
+                res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
                 res.end();
                 return;
             }
@@ -495,7 +496,10 @@ function startApiServer(db, host, port) {
                 return;
             }
 
-            if (url.pathname === "/summary" || url.pathname === "/api/summary") {
+            if (
+                url.pathname === "/summary" ||
+                url.pathname === "/api/summary"
+            ) {
                 const hours = Number(url.searchParams.get("hours") || "24");
                 if (!Number.isFinite(hours) || hours <= 0) {
                     sendJson(res, 400, { error: "hours must be > 0" });
@@ -535,11 +539,7 @@ function startApiServer(db, host, port) {
                     return;
                 }
                 sendJson(res, 200, {
-                    data: getTimeseriesBuckets(
-                        db,
-                        windowHours,
-                        bucketMinutes,
-                    ),
+                    data: getTimeseriesBuckets(db, windowHours, bucketMinutes),
                 });
                 return;
             }

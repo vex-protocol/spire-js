@@ -29,7 +29,8 @@ import { getUserRouter } from "./user.ts";
 import * as uuid from "uuid";
 import { POWER_LEVELS } from "../ClientManager.ts";
 import { JWT_EXPIRY } from "../Spire.ts";
-import { censorUser, type ICensoredUser } from "./utils.ts";
+import type { IUser } from "@vex-chat/types";
+import { censorUser } from "./utils.ts";
 
 // expiry of regkeys
 export const EXPIRY_TIME = 1000 * 60 * 5;
@@ -150,12 +151,12 @@ export const initApp = (
         if (server) {
             return res.send(msgpack.encode(server));
         } else {
-            res.sendStatus(404);
+            return res.sendStatus(404);
         }
     });
 
     api.post("/server/:name", protect, async (req, res) => {
-        const userDetails: ICensoredUser = (req as any).user;
+        const userDetails: IUser = (req as any).user;
         const serverName = atob(req.params.name);
 
         const server = await db.createServer(serverName, userDetails.userID);
@@ -163,7 +164,7 @@ export const initApp = (
     });
 
     api.post("/server/:serverID/invites", protect, async (req, res) => {
-        const userDetails: ICensoredUser = (req as any).user;
+        const userDetails: IUser = (req as any).user;
 
         const payload: IInvitePayload = req.body;
         const serverEntry = await db.retrieveServer(req.params.serverID);
@@ -213,7 +214,7 @@ export const initApp = (
     });
 
     api.get("/server/:serverID/invites", protect, async (req, res) => {
-        const userDetails: ICensoredUser = (req as any).user;
+        const userDetails: IUser = (req as any).user;
 
         const permissions = await db.retrievePermissions(
             userDetails.userID,
@@ -260,7 +261,7 @@ export const initApp = (
     });
 
     api.post("/server/:id/channels", protect, async (req, res) => {
-        const userDetails: ICensoredUser = (req as any).user;
+        const userDetails: IUser = (req as any).user;
         const serverID = req.params.id;
         // resourceID is serverID
         const { name } = req.body;
@@ -312,7 +313,7 @@ export const initApp = (
     });
 
     api.get("/server/:serverID/permissions", protect, async (req, res) => {
-        const userDetails: ICensoredUser = (req as any).user;
+        const userDetails: IUser = (req as any).user;
         const serverID = req.params.serverID;
         try {
             const permissions =
@@ -340,7 +341,7 @@ export const initApp = (
 
     api.delete("/channel/:id", protect, async (req, res) => {
         const channelID = req.params.id;
-        const userDetails: ICensoredUser = (req as any).user;
+        const userDetails: IUser = (req as any).user;
 
         const channel = await db.retrieveChannel(channelID);
 
@@ -389,13 +390,13 @@ export const initApp = (
         if (channel) {
             return res.send(msgpack.encode(channel));
         } else {
-            res.sendStatus(404);
+            return res.sendStatus(404);
         }
     });
 
     api.delete("/permission/:permissionID", protect, async (req, res) => {
         const permissionID = req.params.permissionID;
-        const userDetails: ICensoredUser = (req as any).user;
+        const userDetails: IUser = (req as any).user;
         try {
             // msg.data is permID
             const permToDelete = await db.retrievePermission(permissionID);
@@ -430,7 +431,7 @@ export const initApp = (
     });
 
     api.post("/userList/:channelID", async (req, res) => {
-        const userDetails: ICensoredUser = (req as any).user;
+        const userDetails: IUser = (req as any).user;
         const channelID: string = req.params.channelID;
 
         try {
@@ -473,7 +474,7 @@ export const initApp = (
         if (device) {
             return res.send(msgpack.encode(device));
         } else {
-            res.sendStatus(404);
+            return res.sendStatus(404);
         }
     });
 
@@ -613,7 +614,7 @@ export const initApp = (
     api.post("/emoji/:serverID/json", protect, async (req, res) => {
         const payload: IEmojiPayload = req.body;
 
-        const userDetails: ICensoredUser = (req as any).user;
+        const userDetails: IUser = (req as any).user;
         const device: IDevice | undefined = (req as any).device;
 
         if (!device) {
@@ -691,7 +692,7 @@ export const initApp = (
         async (req, res) => {
             const payload: IEmojiPayload = req.body;
             const serverEntry = await db.retrieveServer(req.params.serverID);
-            const userDetails: ICensoredUser = (req as any).user;
+            const userDetails: IUser = (req as any).user;
             const deviceDetails: IDevice | undefined = (req as any).device;
             if (!deviceDetails) {
                 res.sendStatus(401);
