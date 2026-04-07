@@ -122,7 +122,9 @@ export class Spire extends EventEmitter {
         this.db.on("ready", () => {
             this.dbReady = true;
             this.bootstrapRequestCounter().catch((err) => {
-                this.log.error("Failed to load persisted request counter: " + err);
+                this.log.error(
+                    "Failed to load persisted request counter: " + err,
+                );
             });
         });
 

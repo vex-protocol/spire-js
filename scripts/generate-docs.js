@@ -205,7 +205,10 @@ const endpointOverrides = {
                             properties: {
                                 ok: { type: "boolean" },
                                 uptimeSeconds: { type: "integer" },
-                                startedAt: { type: "string", format: "date-time" },
+                                startedAt: {
+                                    type: "string",
+                                    format: "date-time",
+                                },
                                 now: { type: "string", format: "date-time" },
                                 version: { type: "string" },
                                 commitSha: { type: "string" },
@@ -279,7 +282,8 @@ const spec = {
     info: {
         title: "Spire API",
         version: "1.0.0",
-        description: "Auto-generated endpoint reference for the Spire Express API.",
+        description:
+            "Auto-generated endpoint reference for the Spire Express API.",
     },
     servers: [
         {
@@ -295,7 +299,7 @@ await mkdir(docsDir, { recursive: true });
 await writeFile(
     path.join(docsDir, "openapi.json"),
     JSON.stringify(spec, null, 2) + "\n",
-    "utf8"
+    "utf8",
 );
 
 const html = `<!doctype html>
@@ -324,5 +328,5 @@ const html = `<!doctype html>
 await writeFile(path.join(docsDir, "index.html"), html, "utf8");
 
 console.log(
-    `Generated docs/openapi.json with ${Object.keys(paths).length} route paths.`
+    `Generated docs/openapi.json with ${Object.keys(paths).length} route paths.`,
 );
