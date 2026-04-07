@@ -673,6 +673,30 @@ export class Database extends EventEmitter {
         }
     }
 
+    public async getRequestsTotal(): Promise<number> {
+        const row = await this.db("service_metrics")
+            .select("metric_value")
+            .where({ metric_key: "requests_total" })
+            .first();
+        const raw = row?.metric_value;
+        const count = Number(raw);
+        if (!Number.isFinite(count) || count < 0) {
+            return 0;
+        }
+        return count;
+    }
+
+    public async incrementRequestsTotal(by = 1): Promise<void> {
+        if (!Number.isFinite(by) || by <= 0) {
+            return;
+        }
+        await this.db("service_metrics")
+            .where({ metric_key: "requests_total" })
+            .update({
+                metric_value: this.db.raw("metric_value + ?", [Math.floor(by)]),
+            });
+    }
+
     public async close(): Promise<void> {
         this.log.info("Closing database.");
         await this.db.destroy();
@@ -816,6 +840,23 @@ export class Database extends EventEmitter {
                 },
             );
         }
+
+        if (!(await this.db.schema.hasTable("service_metrics"))) {
+            await this.db.schema.createTable(
+                "service_metrics",
+                (table: Knex.CreateTableBuilder) => {
+                    table.string("metric_key").primary();
+                    table.bigInteger("metric_value").notNullable().defaultTo(0);
+                },
+            );
+        }
+        await this.db("service_metrics")
+            .insert({
+                metric_key: "requests_total",
+                metric_value: 0,
+            })
+            .onConflict("metric_key")
+            .ignore();
 
         this.emit("ready");
     }
