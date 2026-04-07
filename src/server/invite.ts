@@ -7,7 +7,7 @@ import { msgpack } from "../utils/msgpack.ts";
 import { POWER_LEVELS } from "../ClientManager.ts";
 import { Database } from "../Database.ts";
 import { protect } from "./index.ts";
-import type { ICensoredUser } from "./utils.ts";
+import type { IUser } from "@vex-chat/types";
 
 export const getInviteRouter = (
     db: Database,
@@ -23,7 +23,7 @@ export const getInviteRouter = (
 ) => {
     const router = express.Router();
     router.patch("/:inviteID", protect, async (req, res) => {
-        const userDetails: ICensoredUser = (req as any).user;
+        const userDetails: IUser = (req as any).user;
 
         const invite = await db.retrieveInvite(req.params.inviteID);
         if (!invite) {

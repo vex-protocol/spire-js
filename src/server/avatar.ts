@@ -9,7 +9,7 @@ import winston from "winston";
 
 import { ALLOWED_IMAGE_TYPES, protect } from "./index.ts";
 import { Database } from "../Database.ts";
-import type { ICensoredUser } from "./utils.ts";
+import type { IUser } from "@vex-chat/types";
 
 export const getAvatarRouter = (db: Database, log: winston.Logger) => {
     const router = express.Router();
@@ -34,7 +34,7 @@ export const getAvatarRouter = (db: Database, log: winston.Logger) => {
 
     router.post("/:userID/json", protect, async (req, res) => {
         const payload: IFilePayload = req.body;
-        const userDetails: ICensoredUser = (req as any).user;
+        const userDetails: IUser = (req as any).user;
         const deviceDetails: IDevice | undefined = (req as any).device;
 
         if (!deviceDetails) {
@@ -76,7 +76,7 @@ export const getAvatarRouter = (db: Database, log: winston.Logger) => {
         protect,
         multer().single("avatar"),
         async (req, res) => {
-            const userDetails: ICensoredUser = (req as any).user;
+            const userDetails: IUser = (req as any).user;
             const deviceDetails: IDevice | undefined = (req as any).device;
 
             if (!deviceDetails) {

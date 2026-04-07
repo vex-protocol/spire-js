@@ -1,12 +1,10 @@
-import type { IUser } from "@vex-chat/types";
+import type { IUser, IUserRecord } from "@vex-chat/types";
 
-export interface ICensoredUser {
-    userID: string;
-    username: string;
-    lastSeen: Date;
-}
-
-export const censorUser = (user: IUser): ICensoredUser => {
+/**
+ * Strips password fields from a DB user record, returning the
+ * public-safe IUser shape.
+ */
+export const censorUser = (user: IUserRecord): IUser => {
     return {
         userID: user.userID,
         username: user.username,

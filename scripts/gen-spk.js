@@ -15,8 +15,7 @@
 
 import nacl from "tweetnacl";
 
-const raw =
-    process.argv.includes("--raw") || process.argv.includes("-r");
+const raw = process.argv.includes("--raw") || process.argv.includes("-r");
 
 const pair = nacl.sign.keyPair();
 const spk = Buffer.from(pair.secretKey).toString("hex");

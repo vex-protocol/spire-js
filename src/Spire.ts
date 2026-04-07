@@ -12,6 +12,7 @@ import type {
     IMailWS,
     INotifyMsg,
     IRegistrationPayload,
+    IUser,
 } from "@vex-chat/types";
 import { TokenScopes } from "@vex-chat/types";
 import { EventEmitter } from "events";
@@ -28,7 +29,7 @@ import { msgpack } from "./utils/msgpack.ts";
 import { ClientManager } from "./ClientManager.ts";
 import { Database, hashPassword } from "./Database.ts";
 import { initApp, protect } from "./server/index.ts";
-import { censorUser, type ICensoredUser } from "./server/utils.ts";
+import { censorUser } from "./server/utils.ts";
 import { createLogger } from "./utils/createLogger.ts";
 
 // expiry of regkeys = 24hr
@@ -122,7 +123,9 @@ export class Spire extends EventEmitter {
         this.db.on("ready", () => {
             this.dbReady = true;
             this.bootstrapRequestCounter().catch((err) => {
-                this.log.error("Failed to load persisted request counter: " + err);
+                this.log.error(
+                    "Failed to load persisted request counter: " + err,
+                );
             });
         });
 
@@ -252,7 +255,7 @@ export class Spire extends EventEmitter {
 
         // All the app logic strongly coupled to spire class :/
         this.api.ws("/socket", (ws, req) => {
-            const userDetails: ICensoredUser = (req as any).user;
+            const userDetails: IUser = (req as any).user;
             if (!userDetails) {
                 this.log.warn("User attempted to open socket with no jwt.");
                 const err: IBaseMsg = {
@@ -446,7 +449,7 @@ export class Spire extends EventEmitter {
                 res.sendStatus(401);
                 return;
             }
-            const authorUserDetails: ICensoredUser = (req as any).user;
+            const authorUserDetails: IUser = (req as any).user;
 
             const { header, mail }: { header: Uint8Array; mail: IMailWS } =
                 req.body;
