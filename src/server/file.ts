@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 
 import { XUtils } from "@vex-chat/crypto";
@@ -78,10 +79,8 @@ export const getFileRouter = (db: Database, log: winston.Logger) => {
             nonce: payload.nonce,
         };
 
-        // write the file to disk
-        fs.writeFile("files/" + newFile.fileID, buf, () => {
-            log.info("Wrote new file " + newFile.fileID);
-        });
+        await fsp.writeFile("files/" + newFile.fileID, buf);
+        log.info("Wrote new file " + newFile.fileID);
 
         await db.createFile(newFile);
         res.send(msgpack.encode(newFile));
@@ -112,10 +111,8 @@ export const getFileRouter = (db: Database, log: winston.Logger) => {
             nonce: payload.nonce,
         };
 
-        // write the file to disk
-        fs.writeFile("files/" + newFile.fileID, req.file.buffer, () => {
-            log.info("Wrote new file " + newFile.fileID);
-        });
+        await fsp.writeFile("files/" + newFile.fileID, req.file.buffer);
+        log.info("Wrote new file " + newFile.fileID);
 
         await db.createFile(newFile);
         res.send(msgpack.encode(newFile));
