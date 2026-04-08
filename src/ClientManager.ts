@@ -1,3 +1,4 @@
+import type { Database } from "./Database.ts";
 import type {
     IBaseMsg,
     IChallMsg,
@@ -14,15 +15,15 @@ import type {
 import type winston from "winston";
 import type WebSocket from "ws";
 
-import { xConcat, XUtils } from "@vex-chat/crypto";
-import { SocketAuthErrors } from "@vex-chat/types";
 import { EventEmitter } from "events";
 import { setTimeout as sleep } from "node:timers/promises";
+
+import { xConcat, XUtils } from "@vex-chat/crypto";
+import { SocketAuthErrors } from "@vex-chat/types";
+
 import pc from "picocolors";
 import nacl from "tweetnacl";
 import { parse as uuidParse, validate as uuidValidate } from "uuid";
-
-import type { Database } from "./Database.ts";
 
 import { type ISpireOptions, TOKEN_EXPIRY } from "./Spire.ts";
 import { createLogger } from "./utils/createLogger.ts";

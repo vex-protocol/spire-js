@@ -10,15 +10,18 @@ import type {
 import type { Server } from "http";
 import type winston from "winston";
 
-import { XUtils } from "@vex-chat/crypto";
-import { TokenScopes } from "@vex-chat/types";
 import { EventEmitter } from "events";
-import express from "express";
-import jwt from "jsonwebtoken";
 import { execSync } from "node:child_process";
 import * as fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import express from "express";
+
+import { XUtils } from "@vex-chat/crypto";
+import { TokenScopes } from "@vex-chat/types";
+
+import jwt from "jsonwebtoken";
 import nacl from "tweetnacl";
 import { stringify as uuidStringify } from "uuid";
 import { WebSocketServer } from "ws";

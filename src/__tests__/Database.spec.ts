@@ -1,13 +1,13 @@
 // tslint:disable: no-string-literal
 
+import type { ISpireOptions } from "../Spire.ts";
 import type { IPreKeysSQL, IPreKeysWS } from "@vex-chat/types";
 
 import { XUtils } from "@vex-chat/crypto";
+
 import * as uuid from "uuid";
 import { describe, expect, it, vi } from "vitest";
 import winston from "winston";
-
-import type { ISpireOptions } from "../Spire.ts";
 
 import { Database } from "../Database.ts";
 

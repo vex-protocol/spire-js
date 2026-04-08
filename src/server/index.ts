@@ -1,27 +1,30 @@
+import type { Database } from "../Database.ts";
 import type { IDevice, IEmoji, IPreKeysWS } from "@vex-chat/types";
 import type { IUser } from "@vex-chat/types";
 import type winston from "winston";
 
+import * as fs from "node:fs";
+
+import express from "express";
+
 import { XUtils } from "@vex-chat/crypto";
 import { TokenScopes } from "@vex-chat/types";
+
 import cors from "cors";
-import express from "express";
 import { fileTypeFromBuffer, fileTypeFromFile } from "file-type";
 import helmet from "helmet";
 import jwt from "jsonwebtoken";
 import morgan from "morgan";
 import multer from "multer";
-import * as fs from "node:fs";
 import parseDuration from "parse-duration";
 import nacl from "tweetnacl";
 import { stringify as uuidStringify } from "uuid";
-
-import type { Database } from "../Database.ts";
 
 import { POWER_LEVELS } from "../ClientManager.ts";
 import { JWT_EXPIRY } from "../Spire.ts";
 import { getJwtSecret } from "../utils/jwtSecret.ts";
 import { msgpack } from "../utils/msgpack.ts";
+
 import { getAvatarRouter } from "./avatar.ts";
 import { getFileRouter } from "./file.ts";
 import { getInviteRouter } from "./invite.ts";

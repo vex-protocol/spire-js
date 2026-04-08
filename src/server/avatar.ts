@@ -1,14 +1,16 @@
+import type { Database } from "../Database.ts";
 import type { IDevice, IFilePayload } from "@vex-chat/types";
 import type { IUser } from "@vex-chat/types";
 import type winston from "winston";
 
-import { XUtils } from "@vex-chat/crypto";
-import express from "express";
-import { fileTypeFromBuffer, fileTypeFromFile } from "file-type";
-import multer from "multer";
 import * as fs from "node:fs";
 
-import type { Database } from "../Database.ts";
+import express from "express";
+
+import { XUtils } from "@vex-chat/crypto";
+
+import { fileTypeFromBuffer, fileTypeFromFile } from "file-type";
+import multer from "multer";
 
 import { ALLOWED_IMAGE_TYPES, protect } from "./index.ts";
 

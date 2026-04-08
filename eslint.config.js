@@ -47,6 +47,38 @@ export default tseslint.config(
             "@typescript-eslint/consistent-type-exports": "error",
             "@typescript-eslint/no-import-type-side-effects": "error",
 
+            "perfectionist/sort-imports": [
+                "error",
+                {
+                    type: "natural",
+                    order: "asc",
+                    ignoreCase: true,
+                    internalPattern: ["^@vex-chat/"],
+                    newlinesBetween: 1,
+                    customGroups: [
+                        {
+                            groupName: "type-imports",
+                            modifiers: ["type"],
+                        },
+                        {
+                            groupName: "framework",
+                            elementNamePattern: "^express",
+                        },
+                    ],
+                    groups: [
+                        "type-imports",
+                        "builtin",
+                        "framework",
+                        "internal",
+                        "external",
+                        "parent",
+                        "sibling",
+                        "index",
+                        "unknown",
+                    ],
+                },
+            ],
+
             "n/no-missing-import": "off",
             "n/no-unpublished-import": "off",
             "n/no-process-exit": "off",

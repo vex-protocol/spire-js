@@ -1,3 +1,5 @@
+import type { ServerDatabase } from "./db/schema.ts";
+import type { ISpireOptions } from "./Spire.ts";
 import type {
     IChannel,
     IDevice,
@@ -17,9 +19,15 @@ import type {
 } from "@vex-chat/types";
 import type winston from "winston";
 
-import { xMakeNonce, XUtils } from "@vex-chat/crypto";
-import BetterSqlite3 from "better-sqlite3";
 import { EventEmitter } from "events";
+import { pbkdf2Sync } from "node:crypto";
+import * as fs from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+import { xMakeNonce, XUtils } from "@vex-chat/crypto";
+
+import BetterSqlite3 from "better-sqlite3";
 import {
     Kysely,
     type Migration,
@@ -28,14 +36,7 @@ import {
     sql,
     SqliteDialect,
 } from "kysely";
-import { pbkdf2Sync } from "node:crypto";
-import * as fs from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { stringify as uuidStringify, validate as uuidValidate } from "uuid";
-
-import type { ServerDatabase } from "./db/schema.ts";
-import type { ISpireOptions } from "./Spire.ts";
 
 import { createLogger } from "./utils/createLogger.ts";
 

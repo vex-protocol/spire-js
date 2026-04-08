@@ -1,16 +1,19 @@
+import type { Database } from "../Database.ts";
 import type { IDevice, IFilePayload, IFileSQL } from "@vex-chat/types";
 import type winston from "winston";
 
-import { XUtils } from "@vex-chat/crypto";
-import express from "express";
-import multer from "multer";
 import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 
-import type { Database } from "../Database.ts";
+import express from "express";
+
+import { XUtils } from "@vex-chat/crypto";
+
+import multer from "multer";
 
 import { msgpack } from "../utils/msgpack.ts";
+
 import { protect } from "./index.ts";
 
 export const getFileRouter = (db: Database, log: winston.Logger) => {

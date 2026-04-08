@@ -1,18 +1,21 @@
+import type { Database } from "../Database.ts";
 import type { IDevicePayload } from "@vex-chat/types";
 import type { IUser } from "@vex-chat/types";
 import type winston from "winston";
 
+import express from "express";
+
 import { XUtils } from "@vex-chat/crypto";
 import { TokenScopes } from "@vex-chat/types";
-import express from "express";
+
 import nacl from "tweetnacl";
 import { stringify } from "uuid";
 
-import type { Database } from "../Database.ts";
-
 import { msgpack } from "../utils/msgpack.ts";
-import { protect } from "./index.ts";
+
 import { censorUser } from "./utils.ts";
+
+import { protect } from "./index.ts";
 
 export const getUserRouter = (
     db: Database,
