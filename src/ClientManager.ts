@@ -7,7 +7,7 @@ import type {
     IReceiptMsg,
     IResourceMsg,
     IRespMsg,
-    ISucessMsg,
+    ISuccessMsg,
     IUser,
     IUserRecord,
 } from "@vex-chat/types";
@@ -346,7 +346,7 @@ export class ClientManager extends EventEmitter {
         header?: Uint8Array,
         timestamp?: string,
     ) {
-        const msg: ISucessMsg = {
+        const msg: ISuccessMsg = {
             data,
             timestamp,
             transmissionID,
