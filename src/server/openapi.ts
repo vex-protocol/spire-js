@@ -1,27 +1,28 @@
 import type express from "express";
+
 import swaggerUi from "swagger-ui-express";
 
-type AnyRouter = express.Router & { stack?: any[] };
 type AnyApp = express.Application & { _router?: { stack?: any[] } };
+type AnyRouter = express.Router & { stack?: any[] };
+
+interface IOpenApiOperation {
+    responses: Record<string, { description: string }>;
+    summary: string;
+}
+
+interface IOpenApiSpec {
+    info: {
+        description: string;
+        title: string;
+        version: string;
+    };
+    openapi: string;
+    paths: Record<string, Record<string, IOpenApiOperation>>;
+}
 
 interface IRouterMount {
     basePath: string;
     router: AnyRouter;
-}
-
-interface IOpenApiOperation {
-    summary: string;
-    responses: Record<string, { description: string }>;
-}
-
-interface IOpenApiSpec {
-    openapi: string;
-    info: {
-        title: string;
-        version: string;
-        description: string;
-    };
-    paths: Record<string, Record<string, IOpenApiOperation>>;
 }
 
 const normalizePath = (prefix: string, pathValue: string) => {
@@ -42,7 +43,6 @@ const addOperation = (
         paths[openApiPath] = {};
     }
     paths[openApiPath][key] = {
-        summary: `${method.toUpperCase()} ${openApiPath}`,
         responses: {
             "200": { description: "Success" },
             "400": { description: "Bad request" },
@@ -50,6 +50,7 @@ const addOperation = (
             "404": { description: "Not found" },
             "500": { description: "Server error" },
         },
+        summary: `${method.toUpperCase()} ${openApiPath}`,
     };
 };
 
@@ -92,13 +93,13 @@ const createOpenApiSpec = (
     }
 
     return {
-        openapi: "3.1.0",
         info: {
-            title: "Spire API",
-            version: "1.0.0",
             description:
                 "Auto-generated endpoint reference for the Spire Express API.",
+            title: "Spire API",
+            version: "1.0.0",
         },
+        openapi: "3.1.0",
         paths,
     };
 };

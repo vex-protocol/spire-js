@@ -1,16 +1,17 @@
+import type { IDevice, IFilePayload, IFileSQL } from "@vex-chat/types";
+import type winston from "winston";
+
+import { XUtils } from "@vex-chat/crypto";
+import express from "express";
+import multer from "multer";
 import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 
-import { XUtils } from "@vex-chat/crypto";
-import type { IDevice, IFilePayload, IFileSQL } from "@vex-chat/types";
-import express from "express";
-import multer from "multer";
-import type winston from "winston";
+import type { Database } from "../Database.ts";
 
 import { msgpack } from "../utils/msgpack.ts";
 import { protect } from "./index.ts";
-import type { Database } from "../Database.ts";
 
 export const getFileRouter = (db: Database, log: winston.Logger) => {
     const router = express.Router();
@@ -43,8 +44,8 @@ export const getFileRouter = (db: Database, log: winston.Logger) => {
                 res.send(
                     msgpack.encode({
                         ...entry,
-                        size: stat.size,
                         birthtime: stat.birthtime,
+                        size: stat.size,
                     }),
                 );
             });
@@ -74,8 +75,8 @@ export const getFileRouter = (db: Database, log: winston.Logger) => {
 
         const newFile: IFileSQL = {
             fileID: crypto.randomUUID(),
-            owner: payload.owner,
             nonce: payload.nonce,
+            owner: payload.owner,
         };
 
         await fsp.writeFile("files/" + newFile.fileID, buf);
@@ -106,8 +107,8 @@ export const getFileRouter = (db: Database, log: winston.Logger) => {
 
         const newFile: IFileSQL = {
             fileID: crypto.randomUUID(),
-            owner: payload.owner,
             nonce: payload.nonce,
+            owner: payload.owner,
         };
 
         await fsp.writeFile("files/" + newFile.fileID, req.file.buffer);

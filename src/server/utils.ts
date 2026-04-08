@@ -6,8 +6,8 @@ import type { IUser, IUserRecord } from "@vex-chat/types";
  */
 export const censorUser = (user: IUserRecord): IUser => {
     return {
+        lastSeen: user.lastSeen,
         userID: user.userID,
         username: user.username,
-        lastSeen: user.lastSeen,
     };
 };

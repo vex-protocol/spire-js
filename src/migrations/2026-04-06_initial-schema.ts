@@ -1,4 +1,25 @@
-import { sql, type Kysely } from "kysely";
+import { type Kysely, sql } from "kysely";
+
+export async function down(db: Kysely<unknown>): Promise<void> {
+    const tables = [
+        "service_metrics",
+        "invites",
+        "emojis",
+        "files",
+        "permissions",
+        "channels",
+        "servers",
+        "oneTimeKeys",
+        "preKeys",
+        "mail",
+        "devices",
+        "users",
+    ] as const;
+
+    for (const table of tables) {
+        await db.schema.dropTable(table).ifExists().execute();
+    }
+}
 
 export async function up(db: Kysely<unknown>): Promise<void> {
     await db.schema
@@ -194,25 +215,4 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     await sql`INSERT OR IGNORE INTO service_metrics (metric_key, metric_value) VALUES ('requests_total', 0)`.execute(
         db,
     );
-}
-
-export async function down(db: Kysely<unknown>): Promise<void> {
-    const tables = [
-        "service_metrics",
-        "invites",
-        "emojis",
-        "files",
-        "permissions",
-        "channels",
-        "servers",
-        "oneTimeKeys",
-        "preKeys",
-        "mail",
-        "devices",
-        "users",
-    ] as const;
-
-    for (const table of tables) {
-        await db.schema.dropTable(table).ifExists().execute();
-    }
 }

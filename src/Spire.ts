@@ -1,10 +1,3 @@
-import * as fs from "node:fs";
-import { execSync } from "node:child_process";
-import type { Server } from "http";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-import { XUtils } from "@vex-chat/crypto";
 import type {
     IActionToken,
     IBaseMsg,
@@ -14,23 +7,29 @@ import type {
     IRegistrationPayload,
     IUser,
 } from "@vex-chat/types";
+import type { Server } from "http";
+import type winston from "winston";
+
+import { XUtils } from "@vex-chat/crypto";
 import { TokenScopes } from "@vex-chat/types";
 import { EventEmitter } from "events";
 import express from "express";
-
+import jwt from "jsonwebtoken";
+import { execSync } from "node:child_process";
+import * as fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import nacl from "tweetnacl";
 import { stringify as uuidStringify } from "uuid";
-import type winston from "winston";
 import { WebSocketServer } from "ws";
 
-import jwt from "jsonwebtoken";
-import { msgpack } from "./utils/msgpack.ts";
 import { ClientManager } from "./ClientManager.ts";
 import { Database, hashPassword } from "./Database.ts";
 import { initApp, protect } from "./server/index.ts";
 import { censorUser } from "./server/utils.ts";
 import { createLogger } from "./utils/createLogger.ts";
 import { getJwtSecret } from "./utils/jwtSecret.ts";
+import { msgpack } from "./utils/msgpack.ts";
 
 // expiry of regkeys = 24hr
 export const TOKEN_EXPIRY = 1000 * 60 * 10;
@@ -71,8 +70,8 @@ const getCommitSha = (): string => {
     try {
         const sha = execSync("git rev-parse --verify --short=12 HEAD", {
             cwd: repoRoot,
-            stdio: ["ignore", "pipe", "ignore"],
             encoding: "utf8",
+            stdio: ["ignore", "pipe", "ignore"],
             timeout: 1500,
         }).trim();
         return sha || "unknown";
@@ -82,43 +81,43 @@ const getCommitSha = (): string => {
 };
 
 export interface ISpireOptions {
-    logLevel?:
-        | "error"
-        | "warn"
-        | "info"
-        | "http"
-        | "verbose"
-        | "debug"
-        | "silly";
     apiPort?: number;
-    dbType?: "sqlite3" | "sqlite" | "mysql" | "sqlite3mem";
+    dbType?: "mysql" | "sqlite3" | "sqlite3mem" | "sqlite";
+    logLevel?:
+        | "debug"
+        | "error"
+        | "http"
+        | "info"
+        | "silly"
+        | "verbose"
+        | "warn";
 }
 
 export class Spire extends EventEmitter {
-    private db: Database;
-    private clients: ClientManager[] = [];
-    private readonly startedAt = new Date();
-    private readonly version = getAppVersion();
-    private readonly commitSha = getCommitSha();
-    private requestsTotal = 0;
-    private requestsTotalLoaded = false;
-    private queuedRequestIncrements = 0;
-    private dbReady = false;
-
-    private api = express();
-    private wss: WebSocketServer = new WebSocketServer({ noServer: true });
-
-    private signKeys: nacl.SignKeyPair;
-
     private actionTokens: IActionToken[] = [];
+    private api = express();
+    private clients: ClientManager[] = [];
+    private readonly commitSha = getCommitSha();
+    private db: Database;
+    private dbReady = false;
     private deviceChallenges = new Map<
         string,
         { deviceID: string; nonce: string; time: number }
     >();
-
     private log: winston.Logger;
-    private server: Server | null = null;
     private options: ISpireOptions | undefined;
+
+    private queuedRequestIncrements = 0;
+    private requestsTotal = 0;
+
+    private requestsTotalLoaded = false;
+
+    private server: null | Server = null;
+    private signKeys: nacl.SignKeyPair;
+
+    private readonly startedAt = new Date();
+    private readonly version = getAppVersion();
+    private wss: WebSocketServer = new WebSocketServer({ noServer: true });
 
     constructor(SK: string, options?: ISpireOptions) {
         super();
@@ -159,43 +158,22 @@ export class Spire extends EventEmitter {
         return;
     }
 
-    private notify(
-        userID: string,
-        event: string,
-        transmissionID: string,
-        data?: any,
-        deviceID?: string,
-    ): void {
-        for (const client of this.clients) {
-            if (deviceID) {
-                if (client.getDevice().deviceID === deviceID) {
-                    const msg: INotifyMsg = {
-                        transmissionID,
-                        type: "notify",
-                        event,
-                        data,
-                    };
-                    client.send(msg);
-                }
-            } else {
-                if (client.getUser().userID === userID) {
-                    const msg: INotifyMsg = {
-                        transmissionID,
-                        type: "notify",
-                        event,
-                        data,
-                    };
-                    client.send(msg);
-                }
-            }
+    private async bootstrapRequestCounter(): Promise<void> {
+        const persistedTotal = await this.db.getRequestsTotal();
+        const startupIncrements = this.queuedRequestIncrements;
+        this.queuedRequestIncrements = 0;
+        this.requestsTotal = persistedTotal + startupIncrements;
+        if (startupIncrements > 0) {
+            await this.db.incrementRequestsTotal(startupIncrements);
         }
+        this.requestsTotalLoaded = true;
     }
 
     private createActionToken(scope: TokenScopes): IActionToken {
         const token: IActionToken = {
             key: crypto.randomUUID(),
-            time: new Date(Date.now()),
             scope,
+            time: new Date(Date.now()),
         };
         this.actionTokens.push(token);
         return token;
@@ -205,30 +183,6 @@ export class Spire extends EventEmitter {
         if (this.actionTokens.includes(key)) {
             this.actionTokens.splice(this.actionTokens.indexOf(key), 1);
         }
-    }
-
-    private validateToken(key: string, scope: TokenScopes): boolean {
-        this.log.info("Validating token: " + key);
-        for (const rKey of this.actionTokens) {
-            if (rKey.key === key) {
-                if (rKey.scope !== scope) {
-                    continue;
-                }
-
-                const age =
-                    new Date(Date.now()).getTime() - rKey.time.getTime();
-                this.log.info("Token found, " + age + " ms old.");
-                if (age < TOKEN_EXPIRY) {
-                    this.log.info("Token is valid.");
-                    this.deleteActionToken(rKey);
-                    return true;
-                } else {
-                    this.log.info("Token is expired.");
-                }
-            }
-        }
-        this.log.info("Token not found.");
-        return false;
     }
 
     private init(apiPort: number): void {
@@ -268,7 +222,7 @@ export class Spire extends EventEmitter {
                 ws.close();
             }, AUTH_TIMEOUT);
 
-            const onFirstMessage = (data: Buffer | ArrayBuffer | Buffer[]) => {
+            const onFirstMessage = (data: ArrayBuffer | Buffer | Buffer[]) => {
                 const str = Buffer.isBuffer(data)
                     ? data.toString()
                     : Buffer.from(data as ArrayBuffer).toString();
@@ -328,8 +282,8 @@ export class Spire extends EventEmitter {
                 } catch (err) {
                     this.log.warn("WS auth failed: " + err);
                     const errMsg: IBaseMsg = {
-                        type: "unauthorized",
                         transmissionID: crypto.randomUUID(),
+                        type: "unauthorized",
                     };
                     ws.send(XUtils.packMessage(errMsg));
                     ws.close();
@@ -370,26 +324,26 @@ export class Spire extends EventEmitter {
                 let scope;
 
                 switch (tokenType) {
-                    case "file":
-                        scope = TokenScopes.File;
-                        break;
-                    case "register":
-                        scope = TokenScopes.Register;
-                        break;
                     case "avatar":
                         scope = TokenScopes.Avatar;
+                        break;
+                    case "connect":
+                        scope = TokenScopes.Connect;
                         break;
                     case "device":
                         scope = TokenScopes.Device;
                         break;
-                    case "invite":
-                        scope = TokenScopes.Invite;
-                        break;
                     case "emoji":
                         scope = TokenScopes.Emoji;
                         break;
-                    case "connect":
-                        scope = TokenScopes.Connect;
+                    case "file":
+                        scope = TokenScopes.File;
+                        break;
+                    case "invite":
+                        scope = TokenScopes.Invite;
+                        break;
+                    case "register":
+                        scope = TokenScopes.Register;
                         break;
                     default:
                         res.sendStatus(400);
@@ -432,19 +386,19 @@ export class Spire extends EventEmitter {
 
             res.send(
                 msgpack.encode({
-                    user: (req as any).user,
                     exp: (req as any).exp,
                     token: (req as any).bearerToken,
+                    user: (req as any).user,
                 }),
             );
         });
 
         this.api.get("/healthz", (_req, res) => {
             if (!this.dbReady) {
-                res.status(503).json({ ok: false, dbReady: false });
+                res.status(503).json({ dbReady: false, ok: false });
                 return;
             }
-            res.json({ ok: true, dbReady: true });
+            res.json({ dbReady: true, ok: true });
         });
 
         this.api.get("/status", async (_req, res) => {
@@ -454,21 +408,21 @@ export class Spire extends EventEmitter {
 
             const ok = dbHealthy;
             res.json({
-                ok,
-                uptimeSeconds: Math.floor(process.uptime()),
-                startedAt: this.startedAt.toISOString(),
-                now: new Date().toISOString(),
-                version: this.version,
-                commitSha: this.commitSha,
                 checkDurationMs,
+                commitSha: this.commitSha,
+                dbHealthy,
+                dbReady: this.dbReady,
                 latencyBudgetMs: STATUS_LATENCY_BUDGET_MS,
-                withinLatencyBudget:
-                    checkDurationMs <= STATUS_LATENCY_BUDGET_MS,
                 metrics: {
                     requestsTotal: this.requestsTotal,
                 },
-                dbReady: this.dbReady,
-                dbHealthy,
+                now: new Date().toISOString(),
+                ok,
+                startedAt: this.startedAt.toISOString(),
+                uptimeSeconds: Math.floor(process.uptime()),
+                version: this.version,
+                withinLatencyBudget:
+                    checkDurationMs <= STATUS_LATENCY_BUDGET_MS,
             });
         });
 
@@ -516,7 +470,7 @@ export class Spire extends EventEmitter {
 
                 this.log.info("Device challenge issued for " + deviceID);
                 return res.send(
-                    msgpack.encode({ challengeID, challenge: nonce }),
+                    msgpack.encode({ challenge: nonce, challengeID }),
                 );
             } catch (err) {
                 this.log.error("Device challenge error: " + err);
@@ -600,7 +554,7 @@ export class Spire extends EventEmitter {
                         ")",
                 );
                 return res.send(
-                    msgpack.encode({ user: censorUser(user), token }),
+                    msgpack.encode({ token, user: censorUser(user) }),
                 );
             } catch (err) {
                 this.log.error("Device verify error: " + err);
@@ -652,7 +606,7 @@ export class Spire extends EventEmitter {
         });
 
         this.api.post("/auth", async (req, res) => {
-            const credentials: { username: string; password: string } =
+            const credentials: { password: string; username: string; } =
                 req.body;
 
             if (typeof credentials.password !== "string") {
@@ -699,7 +653,7 @@ export class Spire extends EventEmitter {
                 jwt.verify(token, getJwtSecret());
 
                 res.send(
-                    msgpack.encode({ user: censorUser(userEntry), token }),
+                    msgpack.encode({ token, user: censorUser(userEntry) }),
                 );
             } catch (err) {
                 this.log.error(err.toString());
@@ -798,14 +752,59 @@ export class Spire extends EventEmitter {
         });
     }
 
-    private async bootstrapRequestCounter(): Promise<void> {
-        const persistedTotal = await this.db.getRequestsTotal();
-        const startupIncrements = this.queuedRequestIncrements;
-        this.queuedRequestIncrements = 0;
-        this.requestsTotal = persistedTotal + startupIncrements;
-        if (startupIncrements > 0) {
-            await this.db.incrementRequestsTotal(startupIncrements);
+    private notify(
+        userID: string,
+        event: string,
+        transmissionID: string,
+        data?: any,
+        deviceID?: string,
+    ): void {
+        for (const client of this.clients) {
+            if (deviceID) {
+                if (client.getDevice().deviceID === deviceID) {
+                    const msg: INotifyMsg = {
+                        data,
+                        event,
+                        transmissionID,
+                        type: "notify",
+                    };
+                    client.send(msg);
+                }
+            } else {
+                if (client.getUser().userID === userID) {
+                    const msg: INotifyMsg = {
+                        data,
+                        event,
+                        transmissionID,
+                        type: "notify",
+                    };
+                    client.send(msg);
+                }
+            }
         }
-        this.requestsTotalLoaded = true;
+    }
+
+    private validateToken(key: string, scope: TokenScopes): boolean {
+        this.log.info("Validating token: " + key);
+        for (const rKey of this.actionTokens) {
+            if (rKey.key === key) {
+                if (rKey.scope !== scope) {
+                    continue;
+                }
+
+                const age =
+                    new Date(Date.now()).getTime() - rKey.time.getTime();
+                this.log.info("Token found, " + age + " ms old.");
+                if (age < TOKEN_EXPIRY) {
+                    this.log.info("Token is valid.");
+                    this.deleteActionToken(rKey);
+                    return true;
+                } else {
+                    this.log.info("Token is expired.");
+                }
+            }
+        }
+        this.log.info("Token not found.");
+        return false;
     }
 }

@@ -1,15 +1,16 @@
-import * as fs from "node:fs";
+import type { IDevice, IFilePayload } from "@vex-chat/types";
+import type { IUser } from "@vex-chat/types";
+import type winston from "winston";
 
 import { XUtils } from "@vex-chat/crypto";
-import type { IDevice, IFilePayload } from "@vex-chat/types";
 import express from "express";
 import { fileTypeFromBuffer, fileTypeFromFile } from "file-type";
 import multer from "multer";
-import type winston from "winston";
+import * as fs from "node:fs";
+
+import type { Database } from "../Database.ts";
 
 import { ALLOWED_IMAGE_TYPES, protect } from "./index.ts";
-import type { Database } from "../Database.ts";
-import type { IUser } from "@vex-chat/types";
 
 export const getAvatarRouter = (db: Database, log: winston.Logger) => {
     const router = express.Router();

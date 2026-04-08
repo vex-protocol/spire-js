@@ -1,33 +1,32 @@
-import * as fs from "node:fs";
-
 import type { IDevice, IEmoji, IPreKeysWS } from "@vex-chat/types";
+import type { IUser } from "@vex-chat/types";
+import type winston from "winston";
+
+import { XUtils } from "@vex-chat/crypto";
 import { TokenScopes } from "@vex-chat/types";
 import cors from "cors";
 import express from "express";
+import { fileTypeFromBuffer, fileTypeFromFile } from "file-type";
 import helmet from "helmet";
+import jwt from "jsonwebtoken";
 import morgan from "morgan";
+import multer from "multer";
+import * as fs from "node:fs";
 import parseDuration from "parse-duration";
-import type winston from "winston";
+import nacl from "tweetnacl";
+import { stringify as uuidStringify } from "uuid";
 
 import type { Database } from "../Database.ts";
 
-import { XUtils } from "@vex-chat/crypto";
-import { fileTypeFromBuffer, fileTypeFromFile } from "file-type";
-import jwt from "jsonwebtoken";
+import { POWER_LEVELS } from "../ClientManager.ts";
+import { JWT_EXPIRY } from "../Spire.ts";
+import { getJwtSecret } from "../utils/jwtSecret.ts";
 import { msgpack } from "../utils/msgpack.ts";
-import multer from "multer";
-import nacl from "tweetnacl";
-import { stringify as uuidStringify } from "uuid";
 import { getAvatarRouter } from "./avatar.ts";
 import { getFileRouter } from "./file.ts";
 import { getInviteRouter } from "./invite.ts";
 import { setupOpenApiDocs } from "./openapi.ts";
 import { getUserRouter } from "./user.ts";
-
-import { POWER_LEVELS } from "../ClientManager.ts";
-import { JWT_EXPIRY } from "../Spire.ts";
-import { getJwtSecret } from "../utils/jwtSecret.ts";
-import type { IUser } from "@vex-chat/types";
 import { censorUser } from "./utils.ts";
 
 // expiry of regkeys
@@ -42,12 +41,12 @@ export const ALLOWED_IMAGE_TYPES = [
 ];
 
 interface IInvitePayload {
-    serverID: string;
     duration: string;
+    serverID: string;
 }
 
 /** Extract Bearer token from Authorization header. */
-function extractBearer(req: any): string | null {
+function extractBearer(req: any): null | string {
     const header = req.headers.authorization;
     if (!header || !header.startsWith("Bearer ")) return null;
     return header.slice(7);
@@ -134,8 +133,8 @@ export const initApp = (
     apiAny.use(express.json({ limit: "20mb" }));
     apiAny.use(
         express.raw({
-            type: "application/msgpack",
             limit: "20mb",
+            type: "application/msgpack",
         }),
     );
     apiAny.use(helmet());
@@ -588,9 +587,9 @@ export const initApp = (
     });
 
     interface IEmojiPayload {
-        signed: string;
-        name: string;
         file?: string;
+        name: string;
+        signed: string;
     }
 
     api.get("/emoji/:emojiID/details", protect, async (req, res) => {
@@ -672,8 +671,8 @@ export const initApp = (
 
         const emoji: IEmoji = {
             emojiID: crypto.randomUUID(),
-            owner: req.params.serverID,
             name: payload.name,
+            owner: req.params.serverID,
         };
 
         await db.createEmoji(emoji);
@@ -758,8 +757,8 @@ export const initApp = (
 
             const emoji: IEmoji = {
                 emojiID: crypto.randomUUID(),
-                owner: serverID,
                 name: payload.name,
+                owner: serverID,
             };
 
             await db.createEmoji(emoji);

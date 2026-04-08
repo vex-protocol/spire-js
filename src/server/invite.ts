@@ -1,13 +1,13 @@
 import type { TokenScopes } from "@vex-chat/types";
-import express from "express";
-
+import type { IUser } from "@vex-chat/types";
 import type winston from "winston";
 
-import { msgpack } from "../utils/msgpack.ts";
+import express from "express";
 
 import type { Database } from "../Database.ts";
+
+import { msgpack } from "../utils/msgpack.ts";
 import { protect } from "./index.ts";
-import type { IUser } from "@vex-chat/types";
 
 export const getInviteRouter = (
     db: Database,

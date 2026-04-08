@@ -1,18 +1,19 @@
 // tslint:disable: no-string-literal
 
-import { vi, describe, it, expect } from "vitest";
-import { XUtils } from "@vex-chat/crypto";
 import type { IPreKeysSQL, IPreKeysWS } from "@vex-chat/types";
+
+import { XUtils } from "@vex-chat/crypto";
 import * as uuid from "uuid";
+import { describe, expect, it, vi } from "vitest";
 import winston from "winston";
 
-import { Database } from "../Database.ts";
 import type { ISpireOptions } from "../Spire.ts";
+
+import { Database } from "../Database.ts";
 
 // vi.mock is hoisted above all imports automatically.
 // Minimal stubs for uuid functions used by spire src: v4, parse, stringify.
 vi.mock("uuid", () => ({
-    v4: vi.fn(() => "93ce482b-a0f2-4f6e-b1df-3aed61073552"),
     parse: (s: string) =>
         Uint8Array.from(
             s
@@ -26,6 +27,7 @@ vi.mock("uuid", () => ({
             .join("");
         return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
     },
+    v4: vi.fn(() => "93ce482b-a0f2-4f6e-b1df-3aed61073552"),
     validate: () => true,
 }));
 
@@ -33,12 +35,12 @@ vi.mock("uuid", () => ({
 function silentLogger(): winston.Logger {
     const noop = vi.fn();
     return {
-        log: noop,
-        info: noop,
-        warn: noop,
-        error: noop,
         debug: noop,
+        error: noop,
+        info: noop,
+        log: noop,
         verbose: noop,
+        warn: noop,
     } as unknown as winston.Logger;
 }
 
@@ -56,21 +58,21 @@ describe("Database", () => {
     );
 
     const testSQLPreKey: IPreKeysSQL = {
-        userID,
-        keyID,
         deviceID,
+        index: 1,
+        keyID,
         publicKey:
             "30c2d0294c1cfdbb73c6b3bbe6010088c2dba8384b04ff2e2b92172431d66b5e",
         signature:
             "dd0665079426c3efcf4dce9b1487e4aca132f8147581b3294c3f23ddd2b4ba8240a10082bd06805d7eb320d91af971da3306e11b60073ccc3d829710f5036004000030c2d0294c1cfdbb73c6b3bbe6010088c2dba8384b04ff2e2b92172431d66b5e",
-        index: 1,
+        userID,
     };
 
     const testWSPreKey: IPreKeysWS = {
-        publicKey,
-        signature,
         deviceID,
         index: 1,
+        publicKey,
+        signature,
     };
 
     const options: ISpireOptions = {
@@ -96,10 +98,10 @@ describe("Database", () => {
                                 testSQLPreKey.deviceID,
                                 [
                                     {
+                                        deviceID,
+                                        index: 1,
                                         publicKey,
                                         signature,
-                                        index: 1,
-                                        deviceID,
                                     },
                                 ],
                             );
