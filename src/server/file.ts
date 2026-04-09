@@ -1,5 +1,5 @@
 import type { Database } from "../Database.ts";
-import type { IDevice, IFilePayload, IFileSQL } from "@vex-chat/types";
+import type { Device, FilePayload, FileSQL } from "@vex-chat/types";
 import type winston from "winston";
 
 import * as fs from "node:fs";
@@ -56,8 +56,8 @@ export const getFileRouter = (db: Database, log: winston.Logger) => {
     });
 
     router.post("/json", protect, async (req, res) => {
-        const deviceDetails: IDevice | undefined = (req as any).device;
-        const payload: IFilePayload = req.body;
+        const deviceDetails: Device | undefined = (req as any).device;
+        const payload: FilePayload = req.body;
 
         if (!deviceDetails) {
             res.sendStatus(401);
@@ -76,7 +76,7 @@ export const getFileRouter = (db: Database, log: winston.Logger) => {
 
         const buf = Buffer.from(XUtils.decodeBase64(payload.file));
 
-        const newFile: IFileSQL = {
+        const newFile: FileSQL = {
             fileID: crypto.randomUUID(),
             nonce: payload.nonce,
             owner: payload.owner,
@@ -90,8 +90,8 @@ export const getFileRouter = (db: Database, log: winston.Logger) => {
     });
 
     router.post("/", protect, multer().single("file"), async (req, res) => {
-        const deviceDetails: IDevice | undefined = (req as any).device;
-        const payload: IFilePayload = req.body;
+        const deviceDetails: Device | undefined = (req as any).device;
+        const payload: FilePayload = req.body;
 
         if (!deviceDetails) {
             res.sendStatus(400);
@@ -108,7 +108,7 @@ export const getFileRouter = (db: Database, log: winston.Logger) => {
             return;
         }
 
-        const newFile: IFileSQL = {
+        const newFile: FileSQL = {
             fileID: crypto.randomUUID(),
             nonce: payload.nonce,
             owner: payload.owner,

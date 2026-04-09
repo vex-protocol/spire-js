@@ -1,16 +1,16 @@
 import type { Database } from "./Database.ts";
 import type {
-    IBaseMsg,
-    IChallMsg,
-    IDevice,
-    IErrMsg,
-    IMailWS,
-    IReceiptMsg,
-    IResourceMsg,
-    IRespMsg,
-    ISuccessMsg,
-    IUser,
-    IUserRecord,
+    BaseMsg,
+    ChallMsg,
+    Device,
+    ErrMsg,
+    MailWS,
+    ReceiptMsg,
+    ResourceMsg,
+    RespMsg,
+    SuccessMsg,
+    User,
+    UserRecord,
 } from "@vex-chat/types";
 import type winston from "winston";
 import type WebSocket from "ws";
@@ -25,7 +25,7 @@ import pc from "picocolors";
 import nacl from "tweetnacl";
 import { parse as uuidParse, validate as uuidValidate } from "uuid";
 
-import { type ISpireOptions, TOKEN_EXPIRY } from "./Spire.ts";
+import { type SpireOptions, TOKEN_EXPIRY } from "./Spire.ts";
 import { createLogger } from "./utils/createLogger.ts";
 import { createUint8UUID } from "./utils/createUint8UUID.ts";
 import { msgpack } from "./utils/msgpack.ts";
@@ -49,7 +49,7 @@ export class ClientManager extends EventEmitter {
     private challengeID: Uint8Array = createUint8UUID();
     private conn: WebSocket;
     private db: Database;
-    private device: IDevice | null;
+    private device: Device | null;
     private failed: boolean = false;
     private log: winston.Logger;
     private notify: (
@@ -59,15 +59,15 @@ export class ClientManager extends EventEmitter {
         data?: any,
         deviceID?: string,
     ) => void;
-    private user: IUserRecord | null;
-    private userDetails: IUser;
+    private user: UserRecord | null;
+    private userDetails: User;
 
     constructor(
         ws: WebSocket,
         db: Database,
         notify: (userID: string, event: string, transmissionID: string) => void,
-        userDetails: IUser,
-        options?: ISpireOptions,
+        userDetails: User,
+        options?: SpireOptions,
     ) {
         super();
         this.conn = ws;
@@ -82,11 +82,11 @@ export class ClientManager extends EventEmitter {
         this.challenge();
     }
 
-    public getDevice(): IDevice {
+    public getDevice(): Device {
         return this.device!;
     }
 
-    public getUser(): IUserRecord {
+    public getUser(): UserRecord {
         if (!this.authed) {
             throw new Error("You must be authed before getting user info.");
         }
@@ -136,7 +136,7 @@ export class ClientManager extends EventEmitter {
 
     private challenge() {
         this.challengeID = new Uint8Array(uuidParse(crypto.randomUUID()));
-        const challenge: IChallMsg = {
+        const challenge: ChallMsg = {
             challenge: this.challengeID,
             transmissionID: crypto.randomUUID(),
             type: "challenge",
@@ -156,7 +156,7 @@ export class ClientManager extends EventEmitter {
         this.emit("fail");
     }
 
-    private async handleReceipt(msg: IReceiptMsg) {
+    private async handleReceipt(msg: ReceiptMsg) {
         await this.db.deleteMail(msg.nonce, this.getDevice().deviceID);
     }
 
@@ -191,11 +191,11 @@ export class ClientManager extends EventEmitter {
                 pc.bold("⟵   ") +
                     (msg.type === "resource"
                         ? crudColor(
-                              (msg as IResourceMsg).action.toUpperCase(),
+                              (msg as ResourceMsg).action.toUpperCase(),
                           ) +
                           " " +
                           pc.bold(
-                              (msg as IResourceMsg).resourceType.toUpperCase(),
+                              (msg as ResourceMsg).resourceType.toUpperCase(),
                           )
                         : pc.bold(msg.type.toUpperCase())) +
                     " " +
@@ -227,7 +227,7 @@ export class ClientManager extends EventEmitter {
                     this.setAlive(true);
                     break;
                 case "receipt":
-                    this.handleReceipt(msg as IReceiptMsg);
+                    this.handleReceipt(msg as ReceiptMsg);
                     break;
                 case "resource":
                     if (!this.authed) {
@@ -237,10 +237,10 @@ export class ClientManager extends EventEmitter {
                         );
                         break;
                     }
-                    this.parseResourceMsg(msg as IResourceMsg, header);
+                    this.parseResourceMsg(msg as ResourceMsg, header);
                     break;
                 case "response":
-                    this.verifyResponse(msg as IRespMsg);
+                    this.verifyResponse(msg as RespMsg);
                     break;
                 default:
                     this.log.info("unsupported message %s", msg.type);
@@ -249,11 +249,11 @@ export class ClientManager extends EventEmitter {
         });
     }
 
-    private async parseResourceMsg(msg: IResourceMsg, header: Uint8Array) {
+    private async parseResourceMsg(msg: ResourceMsg, header: Uint8Array) {
         switch (msg.resourceType) {
             case "mail":
                 if (msg.action === "CREATE") {
-                    const mail: IMailWS = msg.data;
+                    const mail: MailWS = msg.data;
 
                     try {
                         await this.db.saveMail(
@@ -332,7 +332,7 @@ export class ClientManager extends EventEmitter {
     }
 
     private sendErr(transmissionID: string, message: string, data?: any) {
-        const error: IErrMsg = {
+        const error: ErrMsg = {
             data,
             error: message,
             transmissionID,
@@ -347,7 +347,7 @@ export class ClientManager extends EventEmitter {
         header?: Uint8Array,
         timestamp?: string,
     ) {
-        const msg: ISuccessMsg = {
+        const msg: SuccessMsg = {
             data,
             timestamp,
             transmissionID,
@@ -360,7 +360,7 @@ export class ClientManager extends EventEmitter {
         this.alive = status;
     }
 
-    private async verifyResponse(msg: IRespMsg) {
+    private async verifyResponse(msg: RespMsg) {
         const user = await this.db.retrieveUser(this.userDetails.userID);
         if (user) {
             const devices = await this.db.retrieveUserDeviceList([user.userID]);
@@ -404,11 +404,11 @@ function packMessage(msg: any, header?: Uint8Array) {
     return xConcat(msgh, msgb);
 }
 
-function unpackMessage(msg: Buffer): [Uint8Array, IBaseMsg] {
+function unpackMessage(msg: Buffer): [Uint8Array, BaseMsg] {
     const msgp = Uint8Array.from(msg);
 
     const msgh = msgp.slice(0, 32);
-    const msgb: IBaseMsg = msgpack.decode(msgp.slice(32));
+    const msgb: BaseMsg = msgpack.decode(msgp.slice(32));
 
     return [msgh, msgb];
 }

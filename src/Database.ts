@@ -1,21 +1,21 @@
 import type { ServerDatabase } from "./db/schema.ts";
-import type { ISpireOptions } from "./Spire.ts";
+import type { SpireOptions } from "./Spire.ts";
 import type {
-    IChannel,
-    IDevice,
-    IDevicePayload,
-    IEmoji,
-    IFileSQL,
-    IInvite,
-    IKeyBundle,
-    IMailSQL,
-    IMailWS,
-    IPermission,
-    IPreKeysSQL,
-    IPreKeysWS,
-    IRegistrationPayload,
-    IServer,
-    IUserRecord,
+    Channel,
+    Device,
+    DevicePayload,
+    Emoji,
+    FileSQL,
+    Invite,
+    KeyBundle,
+    MailSQL,
+    MailWS,
+    Permission,
+    PreKeysSQL,
+    PreKeysWS,
+    RegistrationPayload,
+    Server,
+    UserRecord,
 } from "@vex-chat/types";
 import type winston from "winston";
 
@@ -56,7 +56,7 @@ export class Database extends EventEmitter {
     private db: Kysely<ServerDatabase>;
     private log: winston.Logger;
 
-    constructor(options?: ISpireOptions) {
+    constructor(options?: SpireOptions) {
         super();
 
         this.log = createLogger("spire-db", options?.logLevel || "error");
@@ -100,8 +100,8 @@ export class Database extends EventEmitter {
     public async createChannel(
         name: string,
         serverID: string,
-    ): Promise<IChannel> {
-        const channel: IChannel = {
+    ): Promise<Channel> {
+        const channel: Channel = {
             channelID: crypto.randomUUID(),
             name,
             serverID,
@@ -112,12 +112,12 @@ export class Database extends EventEmitter {
 
     public async createDevice(
         owner: string,
-        payload: IDevicePayload,
-    ): Promise<IDevice> {
+        payload: DevicePayload,
+    ): Promise<Device> {
         const device = {
             deleted: 0,
             deviceID: crypto.randomUUID(),
-            lastLogin: new Date(Date.now()).toString(),
+            lastLogin: new Date().toISOString(),
             name: payload.deviceName,
             owner,
             signKey: payload.signKey,
@@ -125,7 +125,7 @@ export class Database extends EventEmitter {
 
         await this.db.insertInto("devices").values(device).execute();
 
-        const medPreKeys: IPreKeysSQL = {
+        const medPreKeys: PreKeysSQL = {
             deviceID: device.deviceID,
             index: payload.preKeyIndex,
             keyID: crypto.randomUUID(),
@@ -139,11 +139,11 @@ export class Database extends EventEmitter {
         return toDevice(device);
     }
 
-    public async createEmoji(emoji: IEmoji): Promise<void> {
+    public async createEmoji(emoji: Emoji): Promise<void> {
         await this.db.insertInto("emojis").values(emoji).execute();
     }
 
-    public async createFile(file: IFileSQL): Promise<void> {
+    public async createFile(file: FileSQL): Promise<void> {
         await this.db.insertInto("files").values(file).execute();
     }
 
@@ -152,8 +152,8 @@ export class Database extends EventEmitter {
         serverID: string,
         ownerID: string,
         expiration: string,
-    ): Promise<IInvite> {
-        const invite: IInvite = {
+    ): Promise<Invite> {
+        const invite: Invite = {
             expiration,
             inviteID,
             owner: ownerID,
@@ -169,7 +169,7 @@ export class Database extends EventEmitter {
         resourceType: string,
         resourceID: string,
         powerLevel: number,
-    ): Promise<IPermission> {
+    ): Promise<Permission> {
         const permissionID = crypto.randomUUID();
 
         // check if it already exists
@@ -183,7 +183,7 @@ export class Database extends EventEmitter {
             return checkPermission[0];
         }
 
-        const permission: IPermission = {
+        const permission: Permission = {
             permissionID,
             powerLevel,
             resourceID,
@@ -195,9 +195,9 @@ export class Database extends EventEmitter {
         return permission;
     }
 
-    public async createServer(name: string, ownerID: string): Promise<IServer> {
+    public async createServer(name: string, ownerID: string): Promise<Server> {
         // create the server
-        const server: IServer = {
+        const server: Server = {
             name,
             serverID: crypto.randomUUID(),
         };
@@ -218,14 +218,14 @@ export class Database extends EventEmitter {
 
     public async createUser(
         regKey: Uint8Array,
-        regPayload: IRegistrationPayload,
-    ): Promise<[IUserRecord | null, Error | null]> {
+        regPayload: RegistrationPayload,
+    ): Promise<[UserRecord | null, Error | null]> {
         try {
             const salt = xMakeNonce();
             const passwordHash = hashPassword(regPayload.password, salt);
 
-            const user: IUserRecord = {
-                lastSeen: new Date(Date.now()),
+            const user: UserRecord = {
+                lastSeen: new Date().toISOString(),
                 passwordHash: passwordHash.toString("hex"),
                 passwordSalt: XUtils.encodeHex(salt),
                 userID: uuidStringify(regKey),
@@ -325,7 +325,7 @@ export class Database extends EventEmitter {
             .execute();
     }
 
-    public async getKeyBundle(deviceID: string): Promise<IKeyBundle | null> {
+    public async getKeyBundle(deviceID: string): Promise<KeyBundle | null> {
         const device = await this.retrieveDevice(deviceID);
         if (!device) {
             throw new Error("DeviceID not found.");
@@ -335,7 +335,7 @@ export class Database extends EventEmitter {
         if (!preKey) {
             throw new Error("Failed to get prekey.");
         }
-        const keyBundle: IKeyBundle = {
+        const keyBundle: KeyBundle = {
             otk,
             preKey,
             signKey: XUtils.decodeHex(device.signKey),
@@ -343,8 +343,8 @@ export class Database extends EventEmitter {
         return keyBundle;
     }
 
-    public async getOTK(deviceID: string): Promise<IPreKeysWS | null> {
-        const rows: IPreKeysSQL[] = await this.db
+    public async getOTK(deviceID: string): Promise<PreKeysWS | null> {
+        const rows: PreKeysSQL[] = await this.db
             .selectFrom("oneTimeKeys")
             .selectAll()
             .where("deviceID", "=", deviceID)
@@ -355,7 +355,7 @@ export class Database extends EventEmitter {
             return null;
         }
         const [otkInfo] = rows;
-        const otk: IPreKeysWS = {
+        const otk: PreKeysWS = {
             deviceID: otkInfo.deviceID,
             index: otkInfo.index,
             publicKey: XUtils.decodeHex(otkInfo.publicKey),
@@ -384,8 +384,8 @@ export class Database extends EventEmitter {
         return Number(result?.count ?? 0);
     }
 
-    public async getPreKeys(deviceID: string): Promise<IPreKeysWS | null> {
-        const rows: IPreKeysSQL[] = await this.db
+    public async getPreKeys(deviceID: string): Promise<PreKeysWS | null> {
+        const rows: PreKeysSQL[] = await this.db
             .selectFrom("preKeys")
             .selectAll()
             .where("deviceID", "=", deviceID)
@@ -394,7 +394,7 @@ export class Database extends EventEmitter {
             return null;
         }
         const [preKeyInfo] = rows;
-        const preKey: IPreKeysWS = {
+        const preKey: PreKeysWS = {
             deviceID: preKeyInfo.deviceID,
             index: preKeyInfo.index,
             publicKey: XUtils.decodeHex(preKeyInfo.publicKey),
@@ -440,18 +440,18 @@ export class Database extends EventEmitter {
         }
     }
 
-    public async markDeviceLogin(device: IDevice): Promise<void> {
+    public async markDeviceLogin(device: Device): Promise<void> {
         await this.db
             .updateTable("devices")
-            .set({ lastLogin: new Date(Date.now()).toString() })
+            .set({ lastLogin: new Date().toISOString() })
             .where("deviceID", "=", device.deviceID)
             .execute();
     }
 
-    public async markUserSeen(user: IUserRecord): Promise<void> {
+    public async markUserSeen(user: UserRecord): Promise<void> {
         await this.db
             .updateTable("users")
-            .set({ lastSeen: new Date(Date.now()).toString() })
+            .set({ lastSeen: new Date().toISOString() })
             .where("userID", "=", user.userID)
             .execute();
     }
@@ -464,11 +464,11 @@ export class Database extends EventEmitter {
      */
     public async retrieveAffectedUsers(
         resourceID: string,
-    ): Promise<IUserRecord[]> {
+    ): Promise<UserRecord[]> {
         const permissionList =
             await this.retrievePermissionsByResourceID(resourceID);
 
-        const users: IUserRecord[] = [];
+        const users: UserRecord[] = [];
         for (const permission of permissionList) {
             const user = await this.retrieveUser(permission.userID);
             if (user) {
@@ -479,8 +479,8 @@ export class Database extends EventEmitter {
         return users;
     }
 
-    public async retrieveChannel(channelID: string): Promise<IChannel | null> {
-        const channels: IChannel[] = await this.db
+    public async retrieveChannel(channelID: string): Promise<Channel | null> {
+        const channels: Channel[] = await this.db
             .selectFrom("channels")
             .selectAll()
             .where("channelID", "=", channelID)
@@ -493,8 +493,8 @@ export class Database extends EventEmitter {
         return channels[0];
     }
 
-    public async retrieveChannels(serverID: string): Promise<IChannel[]> {
-        const channels: IChannel[] = await this.db
+    public async retrieveChannels(serverID: string): Promise<Channel[]> {
+        const channels: Channel[] = await this.db
             .selectFrom("channels")
             .selectAll()
             .where("serverID", "=", serverID)
@@ -502,7 +502,7 @@ export class Database extends EventEmitter {
         return channels;
     }
 
-    public async retrieveDevice(deviceID: string): Promise<IDevice | null> {
+    public async retrieveDevice(deviceID: string): Promise<Device | null> {
         if (uuidValidate(deviceID)) {
             const rows = await this.db
                 .selectFrom("devices")
@@ -533,7 +533,7 @@ export class Database extends EventEmitter {
         return null;
     }
 
-    public async retrieveEmoji(emojiID: string): Promise<IEmoji | null> {
+    public async retrieveEmoji(emojiID: string): Promise<Emoji | null> {
         const rows = await this.db
             .selectFrom("emojis")
             .selectAll()
@@ -545,7 +545,7 @@ export class Database extends EventEmitter {
         return rows[0];
     }
 
-    public async retrieveEmojiList(userID: string): Promise<IEmoji[]> {
+    public async retrieveEmojiList(userID: string): Promise<Emoji[]> {
         return this.db
             .selectFrom("emojis")
             .selectAll()
@@ -553,7 +553,7 @@ export class Database extends EventEmitter {
             .execute();
     }
 
-    public async retrieveFile(fileID: string): Promise<IFileSQL | null> {
+    public async retrieveFile(fileID: string): Promise<FileSQL | null> {
         const file = await this.db
             .selectFrom("files")
             .selectAll()
@@ -567,18 +567,18 @@ export class Database extends EventEmitter {
 
     public async retrieveGroupMembers(
         channelID: string,
-    ): Promise<IUserRecord[]> {
+    ): Promise<UserRecord[]> {
         const channel = await this.retrieveChannel(channelID);
         if (!channel) {
             return [];
         }
-        const permissions: IPermission[] = await this.db
+        const permissions: Permission[] = await this.db
             .selectFrom("permissions")
             .selectAll()
             .where("resourceID", "=", channel.serverID)
             .execute();
 
-        const groupMembers: IUserRecord[] = [];
+        const groupMembers: UserRecord[] = [];
         for (const permission of permissions) {
             const user = await this.retrieveUser(permission.userID);
             if (user) {
@@ -589,7 +589,7 @@ export class Database extends EventEmitter {
         return groupMembers;
     }
 
-    public async retrieveInvite(inviteID: string): Promise<IInvite | null> {
+    public async retrieveInvite(inviteID: string): Promise<Invite | null> {
         const rows = await this.db
             .selectFrom("invites")
             .selectAll()
@@ -604,18 +604,18 @@ export class Database extends EventEmitter {
     public async retrieveMail(
         deviceID: string,
         // tslint:disable-next-line: array-type
-    ): Promise<[Uint8Array, IMailWS, Date][]> {
+    ): Promise<[Uint8Array, MailWS, Date][]> {
         const rawRows = await this.db
             .selectFrom("mail")
             .selectAll()
             .where("recipient", "=", deviceID)
             .execute();
-        const rows: IMailSQL[] = rawRows.map(toMailSQL);
+        const rows: MailSQL[] = rawRows.map(toMailSQL);
 
-        const fixMail: (mail: IMailSQL) => [Uint8Array, IMailWS, Date] = (
+        const fixMail: (mail: MailSQL) => [Uint8Array, MailWS, Date] = (
             mail,
         ) => {
-            const msgb: IMailWS = {
+            const msgb: MailWS = {
                 authorID: mail.authorID,
                 cipher: XUtils.decodeHex(mail.cipher),
                 extra: XUtils.decodeHex(mail.extra),
@@ -640,7 +640,7 @@ export class Database extends EventEmitter {
 
     public async retrievePermission(
         permissionID: string,
-    ): Promise<IPermission | null> {
+    ): Promise<Permission | null> {
         const rows = await this.db
             .selectFrom("permissions")
             .selectAll()
@@ -657,7 +657,7 @@ export class Database extends EventEmitter {
     public async retrievePermissions(
         userID: string,
         resourceType: string,
-    ): Promise<IPermission[]> {
+    ): Promise<Permission[]> {
         if (resourceType === "all") {
             const sList = await this.db
                 .selectFrom("permissions")
@@ -677,7 +677,7 @@ export class Database extends EventEmitter {
 
     public async retrievePermissionsByResourceID(
         resourceID: string,
-    ): Promise<IPermission[]> {
+    ): Promise<Permission[]> {
         return this.db
             .selectFrom("permissions")
             .selectAll()
@@ -685,7 +685,7 @@ export class Database extends EventEmitter {
             .execute();
     }
 
-    public async retrieveServer(serverID: string): Promise<IServer | null> {
+    public async retrieveServer(serverID: string): Promise<Server | null> {
         const rows = await this.db
             .selectFrom("servers")
             .selectAll()
@@ -698,14 +698,14 @@ export class Database extends EventEmitter {
         return toServer(rows[0]);
     }
 
-    public async retrieveServerInvites(serverID: string): Promise<IInvite[]> {
+    public async retrieveServerInvites(serverID: string): Promise<Invite[]> {
         const rows = await this.db
             .selectFrom("invites")
             .selectAll()
             .where("serverID", "=", serverID)
             .execute();
 
-        return rows.filter((invite: IInvite) => {
+        return rows.filter((invite: Invite) => {
             const valid =
                 new Date(Date.now()).getTime() <
                 new Date(invite.expiration).getTime();
@@ -718,12 +718,12 @@ export class Database extends EventEmitter {
         });
     }
 
-    public async retrieveServers(userID: string): Promise<IServer[]> {
+    public async retrieveServers(userID: string): Promise<Server[]> {
         const serverPerms = await this.retrievePermissions(userID, "server");
         if (!serverPerms) {
             return [];
         }
-        const serverList: IServer[] = [];
+        const serverList: Server[] = [];
         for (const perm of serverPerms) {
             const server = await this.retrieveServer(perm.resourceID);
             if (server) {
@@ -736,7 +736,7 @@ export class Database extends EventEmitter {
     // the identifier can be username, public key, or userID
     public async retrieveUser(
         userIdentifier: string,
-    ): Promise<IUserRecord | null> {
+    ): Promise<UserRecord | null> {
         let rows;
         if (uuidValidate(userIdentifier)) {
             rows = await this.db
@@ -760,7 +760,7 @@ export class Database extends EventEmitter {
         return toUserRecord(rows[0]);
     }
 
-    public async retrieveUserDeviceList(userIDs: string[]): Promise<IDevice[]> {
+    public async retrieveUserDeviceList(userIDs: string[]): Promise<Device[]> {
         const rows = await this.db
             .selectFrom("devices")
             .selectAll()
@@ -770,18 +770,18 @@ export class Database extends EventEmitter {
         return rows.map(toDevice);
     }
 
-    public async retrieveUsers(): Promise<IUserRecord[]> {
+    public async retrieveUsers(): Promise<UserRecord[]> {
         const rows = await this.db.selectFrom("users").selectAll().execute();
         return rows.map(toUserRecord);
     }
 
     public async saveMail(
-        mail: IMailWS,
+        mail: MailWS,
         header: Uint8Array,
         deviceID: string,
         userID: string,
     ): Promise<void> {
-        const entry: IMailSQL = {
+        const entry: MailSQL = {
             authorID: userID,
             cipher: XUtils.encodeHex(mail.cipher),
             extra: XUtils.encodeHex(mail.extra),
@@ -794,7 +794,7 @@ export class Database extends EventEmitter {
             readerID: mail.readerID,
             recipient: mail.recipient,
             sender: deviceID,
-            time: new Date(Date.now()),
+            time: new Date().toISOString(),
         };
 
         await this.db
@@ -810,10 +810,10 @@ export class Database extends EventEmitter {
     public async saveOTK(
         userID: string,
         deviceID: string,
-        otks: IPreKeysWS[],
+        otks: PreKeysWS[],
     ): Promise<void> {
         for (const otk of otks) {
-            const newOTK: IPreKeysSQL = {
+            const newOTK: PreKeysSQL = {
                 deviceID: otk.deviceID,
                 index: otk.index,
                 keyID: crypto.randomUUID(),
@@ -862,7 +862,7 @@ function toDevice(row: {
     name: string;
     owner: string;
     signKey: string;
-}): IDevice {
+}): Device {
     return { ...row, deleted: Boolean(row.deleted) };
 }
 
@@ -880,12 +880,12 @@ function toMailSQL(row: {
     recipient: string;
     sender: string;
     time: string;
-}): IMailSQL {
+}): MailSQL {
     return {
         ...row,
         extra: row.extra ?? "",
         forward: Boolean(row.forward),
-        time: new Date(row.time),
+        time: row.time,
     };
 }
 
@@ -893,7 +893,7 @@ function toServer(row: {
     icon: null | string;
     name: string;
     serverID: string;
-}): IServer {
+}): Server {
     return {
         icon: row.icon ?? undefined,
         name: row.name,
@@ -907,8 +907,8 @@ function toUserRecord(row: {
     passwordSalt: string;
     userID: string;
     username: string;
-}): IUserRecord {
-    return { ...row, lastSeen: new Date(row.lastSeen) };
+}): UserRecord {
+    return { ...row };
 }
 
 export const hashPassword = (password: string, salt: Uint8Array) =>

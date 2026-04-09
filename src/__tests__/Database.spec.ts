@@ -1,7 +1,7 @@
 // tslint:disable: no-string-literal
 
-import type { ISpireOptions } from "../Spire.ts";
-import type { IPreKeysSQL, IPreKeysWS } from "@vex-chat/types";
+import type { SpireOptions } from "../Spire.ts";
+import type { PreKeysSQL, PreKeysWS } from "@vex-chat/types";
 
 import { XUtils } from "@vex-chat/crypto";
 
@@ -57,7 +57,7 @@ describe("Database", () => {
         "dd0665079426c3efcf4dce9b1487e4aca132f8147581b3294c3f23ddd2b4ba8240a10082bd06805d7eb320d91af971da3306e11b60073ccc3d829710f5036004000030c2d0294c1cfdbb73c6b3bbe6010088c2dba8384b04ff2e2b92172431d66b5e",
     );
 
-    const testSQLPreKey: IPreKeysSQL = {
+    const testSQLPreKey: PreKeysSQL = {
         deviceID,
         index: 1,
         keyID,
@@ -68,14 +68,14 @@ describe("Database", () => {
         userID,
     };
 
-    const testWSPreKey: IPreKeysWS = {
+    const testWSPreKey: PreKeysWS = {
         deviceID,
         index: 1,
         publicKey,
         signature,
     };
 
-    const options: ISpireOptions = {
+    const options: SpireOptions = {
         dbType: "sqlite3mem",
     };
 

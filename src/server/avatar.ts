@@ -1,6 +1,6 @@
 import type { Database } from "../Database.ts";
-import type { IDevice, IFilePayload } from "@vex-chat/types";
-import type { IUser } from "@vex-chat/types";
+import type { Device, FilePayload } from "@vex-chat/types";
+import type { User } from "@vex-chat/types";
 import type winston from "winston";
 
 import * as fs from "node:fs";
@@ -36,9 +36,9 @@ export const getAvatarRouter = (db: Database, log: winston.Logger) => {
     });
 
     router.post("/:userID/json", protect, async (req, res) => {
-        const payload: IFilePayload = req.body;
-        const userDetails: IUser = (req as any).user;
-        const deviceDetails: IDevice | undefined = (req as any).device;
+        const payload: FilePayload = req.body;
+        const userDetails: User = (req as any).user;
+        const deviceDetails: Device | undefined = (req as any).device;
 
         if (!deviceDetails) {
             res.sendStatus(401);
@@ -79,8 +79,8 @@ export const getAvatarRouter = (db: Database, log: winston.Logger) => {
         protect,
         multer().single("avatar"),
         async (req, res) => {
-            const userDetails: IUser = (req as any).user;
-            const deviceDetails: IDevice | undefined = (req as any).device;
+            const userDetails: User = (req as any).user;
+            const deviceDetails: Device | undefined = (req as any).device;
 
             if (!deviceDetails) {
                 res.sendStatus(401);

@@ -1,6 +1,6 @@
 import type { Database } from "../Database.ts";
-import type { IDevice, IEmoji, IPreKeysWS } from "@vex-chat/types";
-import type { IUser } from "@vex-chat/types";
+import type { Device, Emoji, PreKeysWS } from "@vex-chat/types";
+import type { User } from "@vex-chat/types";
 import type winston from "winston";
 
 import * as fs from "node:fs";
@@ -162,7 +162,7 @@ export const initApp = (
     });
 
     api.post("/server/:name", protect, async (req, res) => {
-        const userDetails: IUser = (req as any).user;
+        const userDetails: User = (req as any).user;
         const serverName = atob(req.params.name);
 
         const server = await db.createServer(serverName, userDetails.userID);
@@ -170,7 +170,7 @@ export const initApp = (
     });
 
     api.post("/server/:serverID/invites", protect, async (req, res) => {
-        const userDetails: IUser = (req as any).user;
+        const userDetails: User = (req as any).user;
 
         const payload: IInvitePayload = req.body;
         const serverEntry = await db.retrieveServer(req.params.serverID);
@@ -220,7 +220,7 @@ export const initApp = (
     });
 
     api.get("/server/:serverID/invites", protect, async (req, res) => {
-        const userDetails: IUser = (req as any).user;
+        const userDetails: User = (req as any).user;
 
         const permissions = await db.retrievePermissions(
             userDetails.userID,
@@ -267,7 +267,7 @@ export const initApp = (
     });
 
     api.post("/server/:id/channels", protect, async (req, res) => {
-        const userDetails: IUser = (req as any).user;
+        const userDetails: User = (req as any).user;
         const serverID = req.params.id;
         // resourceID is serverID
         const { name } = req.body;
@@ -324,7 +324,7 @@ export const initApp = (
     });
 
     api.get("/server/:serverID/permissions", protect, async (req, res) => {
-        const userDetails: IUser = (req as any).user;
+        const userDetails: User = (req as any).user;
         const serverID = req.params.serverID;
         try {
             const permissions =
@@ -352,7 +352,7 @@ export const initApp = (
 
     api.delete("/channel/:id", protect, async (req, res) => {
         const channelID = req.params.id;
-        const userDetails: IUser = (req as any).user;
+        const userDetails: User = (req as any).user;
 
         const channel = await db.retrieveChannel(channelID);
 
@@ -404,7 +404,7 @@ export const initApp = (
 
     api.delete("/permission/:permissionID", protect, async (req, res) => {
         const permissionID = req.params.permissionID;
-        const userDetails: IUser = (req as any).user;
+        const userDetails: User = (req as any).user;
         try {
             // msg.data is permID
             const permToDelete = await db.retrievePermission(permissionID);
@@ -439,7 +439,7 @@ export const initApp = (
     });
 
     api.post("/userList/:channelID", async (req, res) => {
-        const userDetails: IUser = (req as any).user;
+        const userDetails: User = (req as any).user;
         const channelID: string = req.params.channelID;
 
         try {
@@ -500,7 +500,7 @@ export const initApp = (
     });
 
     api.post("/device/:id/mail", protect, async (req, res) => {
-        const deviceDetails: IDevice | undefined = (req as any).device;
+        const deviceDetails: Device | undefined = (req as any).device;
         if (!deviceDetails) {
             res.sendStatus(401);
             return;
@@ -538,7 +538,7 @@ export const initApp = (
     });
 
     api.get("/device/:id/otk/count", protect, async (req, res) => {
-        const deviceDetails: IDevice | undefined = (req as any).device;
+        const deviceDetails: Device | undefined = (req as any).device;
         if (!deviceDetails) {
             res.sendStatus(401);
             return;
@@ -554,7 +554,7 @@ export const initApp = (
     });
 
     api.post("/device/:id/otk", protect, async (req, res) => {
-        const submittedOTKs: IPreKeysWS[] = req.body;
+        const submittedOTKs: PreKeysWS[] = req.body;
         if (submittedOTKs.length === 0) {
             res.sendStatus(200);
             return;
@@ -621,8 +621,8 @@ export const initApp = (
     api.post("/emoji/:serverID/json", protect, async (req, res) => {
         const payload: IEmojiPayload = req.body;
 
-        const userDetails: IUser = (req as any).user;
-        const device: IDevice | undefined = (req as any).device;
+        const userDetails: User = (req as any).user;
+        const device: Device | undefined = (req as any).device;
 
         if (!device) {
             res.sendStatus(401);
@@ -672,7 +672,7 @@ export const initApp = (
             return;
         }
 
-        const emoji: IEmoji = {
+        const emoji: Emoji = {
             emojiID: crypto.randomUUID(),
             name: payload.name,
             owner: req.params.serverID,
@@ -704,8 +704,8 @@ export const initApp = (
                 return;
             }
             const serverEntry = await db.retrieveServer(serverID);
-            const userDetails: IUser = (req as any).user;
-            const deviceDetails: IDevice | undefined = (req as any).device;
+            const userDetails: User = (req as any).user;
+            const deviceDetails: Device | undefined = (req as any).device;
             if (!deviceDetails) {
                 res.sendStatus(401);
                 return;
@@ -758,7 +758,7 @@ export const initApp = (
                 return;
             }
 
-            const emoji: IEmoji = {
+            const emoji: Emoji = {
                 emojiID: crypto.randomUUID(),
                 name: payload.name,
                 owner: serverID,

@@ -1,6 +1,6 @@
 import type { Database } from "../Database.ts";
-import type { IDevicePayload } from "@vex-chat/types";
-import type { IUser } from "@vex-chat/types";
+import type { DevicePayload } from "@vex-chat/types";
+import type { User } from "@vex-chat/types";
 import type winston from "winston";
 
 import express from "express";
@@ -40,7 +40,7 @@ export const getUserRouter = (
     });
 
     router.get("/:id/permissions", protect, async (req, res) => {
-        const userDetails: IUser = (req as any).user;
+        const userDetails: User = (req as any).user;
         try {
             const permissions = await db.retrievePermissions(
                 userDetails.userID,
@@ -53,7 +53,7 @@ export const getUserRouter = (
     });
 
     router.get("/:id/servers", protect, async (req, res) => {
-        const userDetails: IUser = (req as any).user;
+        const userDetails: User = (req as any).user;
         const servers = await db.retrieveServers(userDetails.userID);
         res.send(msgpack.encode(servers));
     });
@@ -65,7 +65,7 @@ export const getUserRouter = (
             res.sendStatus(404);
             return;
         }
-        const userDetails = (req as any).user as IUser;
+        const userDetails = (req as any).user as User;
         if (userDetails.userID !== device.owner) {
             res.sendStatus(401);
             return;
@@ -86,7 +86,7 @@ export const getUserRouter = (
 
     router.post("/:id/devices", protect, async (req, res) => {
         const userDetails = (req as any).user;
-        const devicePayload: IDevicePayload = req.body;
+        const devicePayload: DevicePayload = req.body;
 
         const token = nacl.sign.open(
             XUtils.decodeHex(devicePayload.signed),

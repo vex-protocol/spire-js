@@ -1,6 +1,6 @@
 import type { Database } from "../Database.ts";
 import type { TokenScopes } from "@vex-chat/types";
-import type { IUser } from "@vex-chat/types";
+import type { User } from "@vex-chat/types";
 import type winston from "winston";
 
 import express from "express";
@@ -23,7 +23,7 @@ export const getInviteRouter = (
 ) => {
     const router = express.Router();
     router.patch("/:inviteID", protect, async (req, res) => {
-        const userDetails: IUser = (req as any).user;
+        const userDetails: User = (req as any).user;
 
         const invite = await db.retrieveInvite(req.params.inviteID);
         if (!invite) {

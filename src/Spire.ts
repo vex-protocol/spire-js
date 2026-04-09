@@ -1,11 +1,11 @@
 import type {
-    IActionToken,
-    IBaseMsg,
-    IDevice,
-    IMailWS,
-    INotifyMsg,
-    IRegistrationPayload,
-    IUser,
+    ActionToken,
+    BaseMsg,
+    Device,
+    MailWS,
+    NotifyMsg,
+    RegistrationPayload,
+    User,
 } from "@vex-chat/types";
 import type { Server } from "http";
 import type winston from "winston";
@@ -83,7 +83,7 @@ const getCommitSha = (): string => {
     }
 };
 
-export interface ISpireOptions {
+export interface SpireOptions {
     apiPort?: number;
     dbType?: "mysql" | "sqlite3" | "sqlite3mem" | "sqlite";
     logLevel?:
@@ -97,7 +97,7 @@ export interface ISpireOptions {
 }
 
 export class Spire extends EventEmitter {
-    private actionTokens: IActionToken[] = [];
+    private actionTokens: ActionToken[] = [];
     private api = express();
     private clients: ClientManager[] = [];
     private readonly commitSha = getCommitSha();
@@ -108,7 +108,7 @@ export class Spire extends EventEmitter {
         { deviceID: string; nonce: string; time: number }
     >();
     private log: winston.Logger;
-    private options: ISpireOptions | undefined;
+    private options: SpireOptions | undefined;
 
     private queuedRequestIncrements = 0;
     private requestsTotal = 0;
@@ -122,7 +122,7 @@ export class Spire extends EventEmitter {
     private readonly version = getAppVersion();
     private wss: WebSocketServer = new WebSocketServer({ noServer: true });
 
-    constructor(SK: string, options?: ISpireOptions) {
+    constructor(SK: string, options?: SpireOptions) {
         super();
         this.signKeys = nacl.sign.keyPair.fromSecretKey(XUtils.decodeHex(SK));
 
@@ -172,17 +172,17 @@ export class Spire extends EventEmitter {
         this.requestsTotalLoaded = true;
     }
 
-    private createActionToken(scope: TokenScopes): IActionToken {
-        const token: IActionToken = {
+    private createActionToken(scope: TokenScopes): ActionToken {
+        const token: ActionToken = {
             key: crypto.randomUUID(),
             scope,
-            time: new Date(Date.now()),
+            time: new Date().toISOString(),
         };
         this.actionTokens.push(token);
         return token;
     }
 
-    private deleteActionToken(key: IActionToken) {
+    private deleteActionToken(key: ActionToken) {
         if (this.actionTokens.includes(key)) {
             this.actionTokens.splice(this.actionTokens.indexOf(key), 1);
         }
@@ -241,7 +241,7 @@ export class Spire extends EventEmitter {
                         );
                     }
                     const result = jwt.verify(parsed.token, getJwtSecret());
-                    const userDetails: IUser = (result as any).user;
+                    const userDetails: User = (result as any).user;
 
                     this.log.info(
                         "WS auth succeeded for " + userDetails.username,
@@ -284,7 +284,7 @@ export class Spire extends EventEmitter {
                     });
                 } catch (err) {
                     this.log.warn("WS auth failed: " + err);
-                    const errMsg: IBaseMsg = {
+                    const errMsg: BaseMsg = {
                         transmissionID: crypto.randomUUID(),
                         type: "unauthorized",
                     };
@@ -419,7 +419,7 @@ export class Spire extends EventEmitter {
                 metrics: {
                     requestsTotal: this.requestsTotal,
                 },
-                now: new Date().toISOString(),
+                now: new Date(),
                 ok,
                 startedAt: this.startedAt.toISOString(),
                 uptimeSeconds: Math.floor(process.uptime()),
@@ -566,15 +566,15 @@ export class Spire extends EventEmitter {
         });
 
         this.api.post("/mail", protect, async (req, res) => {
-            const senderDeviceDetails: IDevice | undefined = (req as any)
+            const senderDeviceDetails: Device | undefined = (req as any)
                 .device;
             if (!senderDeviceDetails) {
                 res.sendStatus(401);
                 return;
             }
-            const authorUserDetails: IUser = (req as any).user;
+            const authorUserDetails: User = (req as any).user;
 
-            const { header, mail }: { header: Uint8Array; mail: IMailWS } =
+            const { header, mail }: { header: Uint8Array; mail: MailWS } =
                 req.body;
 
             try {
@@ -666,7 +666,7 @@ export class Spire extends EventEmitter {
 
         this.api.post("/register", async (req, res) => {
             try {
-                const regPayload: IRegistrationPayload = req.body;
+                const regPayload: RegistrationPayload = req.body;
                 if (!usernameRegex.test(regPayload.username)) {
                     res.status(400).send({
                         error: "Username must be between three and nineteen letters, digits, or underscores.",
@@ -765,7 +765,7 @@ export class Spire extends EventEmitter {
         for (const client of this.clients) {
             if (deviceID) {
                 if (client.getDevice().deviceID === deviceID) {
-                    const msg: INotifyMsg = {
+                    const msg: NotifyMsg = {
                         data,
                         event,
                         transmissionID,
@@ -775,7 +775,7 @@ export class Spire extends EventEmitter {
                 }
             } else {
                 if (client.getUser().userID === userID) {
-                    const msg: INotifyMsg = {
+                    const msg: NotifyMsg = {
                         data,
                         event,
                         transmissionID,
@@ -796,7 +796,7 @@ export class Spire extends EventEmitter {
                 }
 
                 const age =
-                    new Date(Date.now()).getTime() - rKey.time.getTime();
+                    Date.now() - new Date(rKey.time).getTime();
                 this.log.info("Token found, " + age + " ms old.");
                 if (age < TOKEN_EXPIRY) {
                     this.log.info("Token is valid.");
