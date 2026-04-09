@@ -1,5 +1,3 @@
-// tslint:disable: no-string-literal
-
 import type { SpireOptions } from "../Spire.ts";
 import type { PreKeysSQL, PreKeysWS } from "@vex-chat/types";
 

@@ -603,7 +603,6 @@ export class Database extends EventEmitter {
 
     public async retrieveMail(
         deviceID: string,
-        // tslint:disable-next-line: array-type
     ): Promise<[Uint8Array, MailWS, string][]> {
         const rawRows = await this.db
             .selectFrom("mail")
