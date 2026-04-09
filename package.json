@@ -13,8 +13,7 @@
     "packageManager": "npm@10.9.2",
     "scripts": {
         "preinstall": "npx only-allow npm",
-        "start": "node src/run.ts",
-        "start:built": "node ./dist/run.js",
+        "start": "node --experimental-strip-types --no-warnings src/run.ts",
         "restart": "pm2 restart spire && pm2 logs spire",
         "build": "tsc",
         "format": "prettier --write .",
