@@ -8,6 +8,7 @@ import * as fsp from "node:fs/promises";
 import express from "express";
 
 import { XUtils } from "@vex-chat/crypto";
+import { type KeyPair, xSignOpen } from "@vex-chat/crypto";
 import { PreKeysWSSchema, TokenScopes, UserSchema } from "@vex-chat/types";
 
 import cors from "cors";
@@ -17,7 +18,6 @@ import jwt from "jsonwebtoken";
 import morgan from "morgan";
 import multer from "multer";
 import parseDuration from "parse-duration";
-import nacl from "tweetnacl";
 import { stringify as uuidStringify } from "uuid";
 import { z } from "zod/v4";
 
@@ -166,7 +166,7 @@ export const initApp = (
     db: Database,
     log: winston.Logger,
     tokenValidator: (key: string, scope: TokenScopes) => boolean,
-    signKeys: nacl.SignKeyPair,
+    signKeys: KeyPair,
     notify: (
         userID: string,
         event: string,
@@ -577,7 +577,7 @@ export const initApp = (
             return;
         }
 
-        const regKey = nacl.sign.open(signed, XUtils.decodeHex(device.signKey));
+        const regKey = xSignOpen(signed, XUtils.decodeHex(device.signKey));
         if (
             regKey &&
             tokenValidator(uuidStringify(regKey), TokenScopes.Connect)
@@ -635,7 +635,7 @@ export const initApp = (
             return;
         }
 
-        const message = nacl.sign.open(
+        const message = xSignOpen(
             otk.signature,
             XUtils.decodeHex(device.signKey),
         );

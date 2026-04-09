@@ -4,9 +4,9 @@ import type winston from "winston";
 import express from "express";
 
 import { XUtils } from "@vex-chat/crypto";
+import { xSignOpen } from "@vex-chat/crypto";
 import { DevicePayloadSchema, TokenScopes } from "@vex-chat/types";
 
-import nacl from "tweetnacl";
 import { stringify } from "uuid";
 
 import { msgpack } from "../utils/msgpack.ts";
@@ -96,7 +96,7 @@ export const getUserRouter = (
         }
         const deviceData = parsed.data;
 
-        const token = nacl.sign.open(
+        const token = xSignOpen(
             XUtils.decodeHex(deviceData.signed),
             XUtils.decodeHex(deviceData.signKey),
         );

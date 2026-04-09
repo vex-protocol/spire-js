@@ -12,6 +12,12 @@ import express from "express";
 
 import { XUtils } from "@vex-chat/crypto";
 import {
+    type KeyPair,
+    xRandomBytes,
+    xSignKeyPairFromSecret,
+    xSignOpen,
+} from "@vex-chat/crypto";
+import {
     MailWSSchema,
     RegistrationPayloadSchema,
     TokenScopes,
@@ -19,7 +25,6 @@ import {
 } from "@vex-chat/types";
 
 import jwt from "jsonwebtoken";
-import nacl from "tweetnacl";
 import { stringify as uuidStringify } from "uuid";
 import { WebSocketServer } from "ws";
 import { z } from "zod/v4";
@@ -154,7 +159,7 @@ export class Spire extends EventEmitter {
     private requestsTotalLoaded = false;
 
     private server: null | Server = null;
-    private signKeys: nacl.SignKeyPair;
+    private signKeys: KeyPair;
 
     private readonly startedAt = new Date();
     private readonly version = getAppVersion();
@@ -162,7 +167,7 @@ export class Spire extends EventEmitter {
 
     constructor(SK: string, options?: SpireOptions) {
         super();
-        this.signKeys = nacl.sign.keyPair.fromSecretKey(XUtils.decodeHex(SK));
+        this.signKeys = xSignKeyPairFromSecret(XUtils.decodeHex(SK));
 
         this.db = new Database(options);
         this.db.on("ready", () => {
@@ -506,7 +511,7 @@ export class Spire extends EventEmitter {
                 }
 
                 // Generate challenge nonce (32 bytes)
-                const nonce = XUtils.encodeHex(nacl.randomBytes(32));
+                const nonce = XUtils.encodeHex(xRandomBytes(32));
                 const challengeID = crypto.randomUUID();
                 this.deviceChallenges.set(challengeID, {
                     deviceID,
@@ -563,7 +568,7 @@ export class Spire extends EventEmitter {
                 }
 
                 // Verify the Ed25519 signature
-                const opened = nacl.sign.open(
+                const opened = xSignOpen(
                     XUtils.decodeHex(signed),
                     XUtils.decodeHex(device.signKey),
                 );
@@ -724,7 +729,7 @@ export class Spire extends EventEmitter {
                     return;
                 }
 
-                const regKey = nacl.sign.open(
+                const regKey = xSignOpen(
                     XUtils.decodeHex(regPayload.signed),
                     XUtils.decodeHex(regPayload.signKey),
                 );

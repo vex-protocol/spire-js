@@ -18,10 +18,10 @@ import { EventEmitter } from "events";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { xConcat, XUtils } from "@vex-chat/crypto";
+import { xSignOpen } from "@vex-chat/crypto";
 import { MailWSSchema, SocketAuthErrors } from "@vex-chat/types";
 
 import pc from "picocolors";
-import nacl from "tweetnacl";
 import { parse as uuidParse, validate as uuidValidate } from "uuid";
 
 import { type SpireOptions, TOKEN_EXPIRY } from "./Spire.ts";
@@ -374,7 +374,7 @@ export class ClientManager extends EventEmitter {
             const devices = await this.db.retrieveUserDeviceList([user.userID]);
             let message: null | Uint8Array = null;
             for (const device of devices) {
-                const verified = nacl.sign.open(
+                const verified = xSignOpen(
                     msg.signed,
                     XUtils.decodeHex(device.signKey),
                 );

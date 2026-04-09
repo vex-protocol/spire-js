@@ -42,7 +42,7 @@
         "@types/swagger-ui-express": "^4.1.8",
         "@types/uuid": "^10.0.0",
         "@types/ws": "^8.5.10",
-        "@vex-chat/crypto": "^1.2.0-rc.0",
+        "@vex-chat/crypto": "^1.2.0-rc.1",
         "@vex-chat/types": "^2.0.0-rc.1",
         "@vitest/eslint-plugin": "^1.6.14",
         "eslint": "^10.1.0",
