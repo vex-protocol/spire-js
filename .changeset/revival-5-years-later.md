@@ -1,10 +1,10 @@
 ---
-"@vex-chat/spire": minor
+"@vex-chat/spire": major
 ---
 
 First release after a 5-year dormancy. Latest public npm was `0.8.0` (published 2021-02-03) and the repo went `private` shortly after. This cuts a new published version off the modern tree, aligned with `@vex-chat/types@2.0.0` and `@vex-chat/crypto@2.0.0`.
 
-Pre-1.0 semver, so the many breaking changes all ride on a minor bump — every consumer of `0.8.0` should treat this as a rewrite and re-integrate.
+Classified as **major** — not the usual pre-1.0 minor-for-breaking-changes convention. The new Zod runtime validation on every trust boundary is the deciding factor: consumers that worked against `0.8.0`'s permissive request handling will see their requests rejected by the new zod `.parse()` step when fields are missing, wrongly typed, or contain unexpected shapes. The message framing, auth layer, database layer, and docs-serving layer have all also changed substantially. Operators should treat this as a rewrite and re-integrate end-to-end rather than an in-place upgrade.
 
 ### Stack
 
