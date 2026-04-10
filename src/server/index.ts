@@ -194,10 +194,10 @@ export const initApp = (
             directives: {
                 defaultSrc: ["'self'"],
                 scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
-                styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
-                imgSrc: ["'self'", "data:"],
-                connectSrc: ["'self'"],
-                fontSrc: ["'self'", "https://fonts.gstatic.com"],
+                styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://fonts.googleapis.com"],
+                imgSrc: ["'self'", "data:", "https:"],
+                connectSrc: ["'self'", "https://cdn.jsdelivr.net", "https://api.scalar.com"],
+                fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net"],
             },
         },
     }));
