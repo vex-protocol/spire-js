@@ -1,25 +1,46 @@
 /**
- * Serves the OpenAPI and AsyncAPI specs from @vex-chat/types.
+ * API documentation endpoints.
  *
- * The specs are generated at build time from Zod schemas (the single source
- * of truth) — not introspected from Express routes at runtime.
+ * - GET /docs      — Scalar OpenAPI viewer (REST API)
+ * - GET /async-docs — AsyncAPI web component viewer (WebSocket protocol)
+ * - GET /openapi.json  — raw OpenAPI 3.1 spec
+ * - GET /asyncapi.json — raw AsyncAPI 3.0 spec
+ *
+ * Specs are generated at build time from Zod schemas in @vex-chat/types.
  */
 import type express from "express";
 
 import { createRequire } from "node:module";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-import swaggerUi from "swagger-ui-express";
+import { apiReference } from "@scalar/express-api-reference";
 
 const require = createRequire(import.meta.url);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export const setupOpenApiDocs = (api: express.Application) => {
-    const openApiSpec = require("@vex-chat/types/openapi.json") as swaggerUi.JsonObject;
+export const setupDocs = (api: express.Application) => {
+    const openApiSpec = require("@vex-chat/types/openapi.json") as Record<string, unknown>;
     const asyncApiSpec = require("@vex-chat/types/asyncapi.json") as Record<string, unknown>;
 
-    // Raw JSON endpoints
+    // Raw JSON specs
     api.get("/openapi.json", (_req, res) => { res.json(openApiSpec); });
     api.get("/asyncapi.json", (_req, res) => { res.json(asyncApiSpec); });
 
-    // Swagger UI at /docs — spec passed inline, no external fetch needed
-    api.use("/docs", swaggerUi.serve, swaggerUi.setup(openApiSpec));
+    // Scalar — OpenAPI viewer
+    api.use("/docs", apiReference({ content: openApiSpec, theme: "purple" }));
+
+    // Self-host the AsyncAPI web component JS from node_modules
+    api.use(
+        "/vendor",
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- express.static path
+        require("express").static(
+            path.resolve(__dirname, "../../node_modules/@asyncapi/web-component/lib"),
+        ),
+    );
+
+    // AsyncAPI viewer — static HTML page
+    api.get("/async-docs", (_req, res) => {
+        res.sendFile(path.resolve(__dirname, "../../public/async-docs.html"));
+    });
 };

@@ -38,7 +38,6 @@
         "@types/morgan": "^1.9.9",
         "@types/multer": "^2.0.0",
         "@types/node": "^24.12.2",
-        "@types/swagger-ui-express": "^4.1.8",
         "@types/uuid": "^10.0.0",
         "@types/ws": "^8.5.10",
         "@vex-chat/crypto": "^1.2.0-rc.2",
@@ -68,6 +67,8 @@
         "@types/readable-stream": "4.0.11"
     },
     "dependencies": {
+        "@asyncapi/web-component": "^2.6.5",
+        "@scalar/express-api-reference": "^0.9.7",
         "better-sqlite3": "^11.0.0",
         "cors": "^2.8.5",
         "dotenv": "^17.0.0",
@@ -81,7 +82,6 @@
         "multer": "^2.0.0",
         "parse-duration": "^2.0.0",
         "picocolors": "^1.1.1",
-        "swagger-ui-express": "^5.0.1",
         "tweetnacl": "^1.0.3",
         "uuid": "^8.3.1",
         "winston": "^3.3.3",

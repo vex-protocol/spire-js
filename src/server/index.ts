@@ -29,7 +29,7 @@ import { msgpack } from "../utils/msgpack.ts";
 import { getAvatarRouter } from "./avatar.ts";
 import { getFileRouter } from "./file.ts";
 import { getInviteRouter } from "./invite.ts";
-import { setupOpenApiDocs } from "./openapi.ts";
+import { setupDocs } from "./openapi.ts";
 import {
     hasAnyPermission,
     hasPermission,
@@ -863,7 +863,7 @@ export const initApp = (
 
     api.use("/invite", inviteRouter);
 
-    setupOpenApiDocs(api);
+    setupDocs(api);
 };
 
 /**
