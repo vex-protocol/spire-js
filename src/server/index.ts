@@ -154,6 +154,8 @@ export const msgpackParser: express.RequestHandler = (req, res, next) => {
     next();
 };
 
+const isProduction = process.env["NODE_ENV"] === "production";
+
 const directories = ["files", "avatars"];
 for (const dir of directories) {
     if (!fs.existsSync(dir)) {
@@ -189,30 +191,9 @@ export const initApp = (
             type: "application/msgpack",
         }),
     );
-    // Relaxed CSP for /docs and /async-docs (Scalar CDN + AJV eval)
-    const docsCsp = helmet({
-        contentSecurityPolicy: {
-            directives: {
-                defaultSrc: ["'self'"],
-                scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.jsdelivr.net"],
-                styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://fonts.googleapis.com"],
-                imgSrc: ["'self'", "data:", "https:"],
-                connectSrc: ["'self'", "https://cdn.jsdelivr.net", "https://api.scalar.com"],
-                fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net"],
-            },
-        },
-    });
-
-    // Strict CSP for everything else
-    const strictCsp = helmet();
-
-    api.use((req, res, next) => {
-        if (req.path.startsWith("/docs") || req.path.startsWith("/async-docs") || req.path.startsWith("/vendor")) {
-            docsCsp(req, res, next);
-        } else {
-            strictCsp(req, res, next);
-        }
-    });
+    if (isProduction) {
+        api.use(helmet());
+    }
     api.use(msgpackParser);
     api.use(checkAuth);
     api.use(checkDevice);
