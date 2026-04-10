@@ -41,8 +41,6 @@
         "@types/node": "24.12.2",
         "@types/uuid": "10.0.0",
         "@types/ws": "8.18.1",
-        "@vex-chat/crypto": "2.0.0",
-        "@vex-chat/types": "2.0.0",
         "@vitest/eslint-plugin": "1.6.15",
         "eslint": "10.2.0",
         "eslint-config-prettier": "10.1.8",
@@ -70,6 +68,8 @@
     "dependencies": {
         "@asyncapi/web-component": "2.6.5",
         "@scalar/express-api-reference": "0.9.7",
+        "@vex-chat/crypto": "2.0.0",
+        "@vex-chat/types": "2.0.0",
         "better-sqlite3": "11.10.0",
         "cors": "2.8.6",
         "dotenv": "17.4.1",
