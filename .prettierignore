@@ -1,0 +1,15 @@
+# Generated build artefacts
+dist/
+docs/
+
+# Package manager / lockfiles
+package-lock.json
+
+# Local-only Claude Code state
+.claude/settings.local.json
+
+# Plain-text tool version pins (asdf / setup-node / mise)
+.tool-versions
+
+# License checker failure reports
+license-error-*.md

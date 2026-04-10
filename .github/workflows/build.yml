@@ -61,9 +61,10 @@ jobs:
               run: npm run license:check
 
             - name: Security audit
-              run: npm audit --audit-level=high || true
+              run: npm audit --audit-level=high
 
             - name: Socket security scan
+              if: github.event.pull_request.head.repo.full_name == github.repository
               run: npx @socketsecurity/cli@latest ci
               env:
                   SOCKET_SECURITY_API_KEY: ${{ secrets.SOCKET_API_KEY }}
