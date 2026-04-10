@@ -1,7 +1,5 @@
 # spire
 
-![build](https://github.com/vex-chat/spire/workflows/build/badge.svg)
-
 A vex server implementation in NodeJS.
 
 ## dev setup
