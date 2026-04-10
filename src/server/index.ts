@@ -189,7 +189,8 @@ export const initApp = (
             type: "application/msgpack",
         }),
     );
-    api.use(helmet({
+    // Relaxed CSP for /docs and /async-docs (Scalar CDN + AJV eval)
+    const docsCsp = helmet({
         contentSecurityPolicy: {
             directives: {
                 defaultSrc: ["'self'"],
@@ -200,7 +201,18 @@ export const initApp = (
                 fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net"],
             },
         },
-    }));
+    });
+
+    // Strict CSP for everything else
+    const strictCsp = helmet();
+
+    api.use((req, res, next) => {
+        if (req.path.startsWith("/docs") || req.path.startsWith("/async-docs") || req.path.startsWith("/vendor")) {
+            docsCsp(req, res, next);
+        } else {
+            strictCsp(req, res, next);
+        }
+    });
     api.use(msgpackParser);
     api.use(checkAuth);
     api.use(checkDevice);
