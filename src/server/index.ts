@@ -863,12 +863,7 @@ export const initApp = (
 
     api.use("/invite", inviteRouter);
 
-    setupOpenApiDocs(api, [
-        { basePath: "/user", router: userRouter },
-        { basePath: "/file", router: fileRouter },
-        { basePath: "/avatar", router: avatarRouter },
-        { basePath: "/invite", router: inviteRouter },
-    ]);
+    setupOpenApiDocs(api);
 };
 
 /**
