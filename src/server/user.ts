@@ -41,15 +41,11 @@ export const getUserRouter = (
 
     router.get("/:id/permissions", protect, async (req, res) => {
         const userDetails = getUser(req);
-        try {
-            const permissions = await db.retrievePermissions(
-                userDetails.userID,
-                "all",
-            );
-            res.send(msgpack.encode(permissions));
-        } catch (err: unknown) {
-            res.status(500).send(String(err));
-        }
+        const permissions = await db.retrievePermissions(
+            userDetails.userID,
+            "all",
+        );
+        res.send(msgpack.encode(permissions));
     });
 
     router.get("/:id/servers", protect, async (req, res) => {

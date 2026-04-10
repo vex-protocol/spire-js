@@ -13,6 +13,7 @@ import { fileTypeFromBuffer, fileTypeFromFile } from "file-type";
 import multer from "multer";
 import { z } from "zod/v4";
 
+import { uploadLimiter } from "./rateLimit.ts";
 import { getParam, getUser } from "./utils.ts";
 
 import { ALLOWED_IMAGE_TYPES, protect } from "./index.ts";
@@ -93,6 +94,7 @@ export const getAvatarRouter = (db: Database, log: winston.Logger) => {
 
     router.post(
         "/:userID",
+        uploadLimiter,
         protect,
         multer().single("avatar"),
         async (req, res) => {

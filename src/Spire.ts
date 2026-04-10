@@ -32,6 +32,7 @@ import { z } from "zod/v4";
 import { ClientManager } from "./ClientManager.ts";
 import { Database, hashPassword } from "./Database.ts";
 import { initApp, protect } from "./server/index.ts";
+import { authLimiter } from "./server/rateLimit.ts";
 import { censorUser, getParam, getUser } from "./server/utils.ts";
 import { createLogger } from "./utils/createLogger.ts";
 import { getJwtSecret } from "./utils/jwtSecret.ts";
@@ -168,6 +169,13 @@ export class Spire extends EventEmitter {
     constructor(SK: string, options?: SpireOptions) {
         super();
         this.signKeys = xSignKeyPairFromSecret(XUtils.decodeHex(SK));
+
+        // Trust a single proxy hop (nginx / cloudflare / load balancer).
+        // Required so `req.ip` and `express-rate-limit`'s keyGenerator see
+        // the real client address via X-Forwarded-For. Never use `true` —
+        // that lets attackers spoof the header and bypass rate limiting.
+        // If spire is deployed without a proxy, set this to 0 instead.
+        this.api.set("trust proxy", 1);
 
         this.db = new Database(options);
         this.db.on("ready", () => {
@@ -495,7 +503,7 @@ export class Spire extends EventEmitter {
 
         // ── Device-key auth ──────────────────────────────────────────
 
-        this.api.post("/auth/device", async (req, res) => {
+        this.api.post("/auth/device", authLimiter, async (req, res) => {
             try {
                 const parsed = deviceAuthPayload.safeParse(req.body);
                 if (!parsed.success) {
@@ -534,7 +542,7 @@ export class Spire extends EventEmitter {
             }
         });
 
-        this.api.post("/auth/device/verify", async (req, res) => {
+        this.api.post("/auth/device/verify", authLimiter, async (req, res) => {
             try {
                 const parsed = deviceVerifyPayload.safeParse(req.body);
                 if (!parsed.success) {
@@ -634,38 +642,33 @@ export class Spire extends EventEmitter {
             }
             const { header, mail } = parsed.data;
 
-            try {
-                await this.db.saveMail(
-                    mail,
-                    header,
-                    senderDeviceDetails.deviceID,
-                    authorUserDetails.userID,
-                );
-                this.log.info("Received mail for " + mail.recipient);
+            await this.db.saveMail(
+                mail,
+                header,
+                senderDeviceDetails.deviceID,
+                authorUserDetails.userID,
+            );
+            this.log.info("Received mail for " + mail.recipient);
 
-                const recipientDeviceDetails = await this.db.retrieveDevice(
-                    mail.recipient,
-                );
-                if (!recipientDeviceDetails) {
-                    res.sendStatus(400);
-                    return;
-                }
-
-                res.sendStatus(200);
-                this.notify(
-                    recipientDeviceDetails.owner,
-                    "mail",
-                    crypto.randomUUID(),
-                    null,
-                    mail.recipient,
-                );
-            } catch (err: unknown) {
-                this.log.error(String(err));
-                res.status(500).send(String(err));
+            const recipientDeviceDetails = await this.db.retrieveDevice(
+                mail.recipient,
+            );
+            if (!recipientDeviceDetails) {
+                res.sendStatus(400);
+                return;
             }
+
+            res.sendStatus(200);
+            this.notify(
+                recipientDeviceDetails.owner,
+                "mail",
+                crypto.randomUUID(),
+                null,
+                mail.recipient,
+            );
         });
 
-        this.api.post("/auth", async (req, res) => {
+        this.api.post("/auth", authLimiter, async (req, res) => {
             const parsed = authPayload.safeParse(req.body);
             if (!parsed.success) {
                 res.status(400).json({
@@ -711,7 +714,7 @@ export class Spire extends EventEmitter {
             }
         });
 
-        this.api.post("/register", async (req, res) => {
+        this.api.post("/register", authLimiter, async (req, res) => {
             try {
                 const regParsed = RegistrationPayloadSchema.safeParse(req.body);
                 if (!regParsed.success) {

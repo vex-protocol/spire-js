@@ -27,6 +27,7 @@ import { getJwtSecret } from "../utils/jwtSecret.ts";
 import { msgpack } from "../utils/msgpack.ts";
 
 import { getAvatarRouter } from "./avatar.ts";
+import { errorHandler } from "./errors.ts";
 import { getFileRouter } from "./file.ts";
 import { getInviteRouter } from "./invite.ts";
 import { setupDocs } from "./openapi.ts";
@@ -35,6 +36,7 @@ import {
     hasPermission,
     userHasPermission,
 } from "./permissions.ts";
+import { globalLimiter } from "./rateLimit.ts";
 import { getUserRouter } from "./user.ts";
 import { censorUser, getParam, getUser } from "./utils.ts";
 
@@ -184,6 +186,10 @@ export const initApp = (
     const inviteRouter = getInviteRouter(db, log, tokenValidator, notify);
 
     // MIDDLEWARE
+    // Global per-IP rate limit is the FIRST middleware so a flooded
+    // source hits the limiter before Express spends any cycles on
+    // body parsing, helmet, or auth. See src/server/rateLimit.ts.
+    api.use(globalLimiter);
     api.use(express.json({ limit: "20mb" }));
     api.use(
         express.raw({
@@ -375,24 +381,15 @@ export const initApp = (
     api.get("/server/:serverID/permissions", protect, async (req, res) => {
         const userDetails = getUser(req);
         const serverID = getParam(req, "serverID");
-        try {
-            const permissions =
-                await db.retrievePermissionsByResourceID(serverID);
-            let found = false;
-            for (const perm of permissions) {
-                if (perm.userID === userDetails.userID) {
-                    res.send(msgpack.encode(permissions));
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                res.sendStatus(401);
-                return;
-            }
-        } catch (err: unknown) {
-            res.status(500).send(String(err));
+        const permissions = await db.retrievePermissionsByResourceID(serverID);
+        const canSee = permissions.some(
+            (perm) => perm.userID === userDetails.userID,
+        );
+        if (!canSee) {
+            res.sendStatus(401);
+            return;
         }
+        res.send(msgpack.encode(permissions));
     });
 
     api.delete("/channel/:id", protect, async (req, res) => {
@@ -450,69 +447,57 @@ export const initApp = (
     api.delete("/permission/:permissionID", protect, async (req, res) => {
         const permissionID = getParam(req, "permissionID");
         const userDetails = getUser(req);
-        try {
-            // msg.data is permID
-            const permToDelete = await db.retrievePermission(permissionID);
-            if (!permToDelete) {
-                res.sendStatus(404);
+        const permToDelete = await db.retrievePermission(permissionID);
+        if (!permToDelete) {
+            res.sendStatus(404);
+            return;
+        }
+
+        const permissions = await db.retrievePermissions(
+            userDetails.userID,
+            permToDelete.resourceType,
+        );
+
+        for (const perm of permissions) {
+            if (
+                perm.resourceID === permToDelete.resourceID &&
+                (perm.userID === userDetails.userID ||
+                    (perm.powerLevel > POWER_LEVELS.DELETE &&
+                        perm.powerLevel > permToDelete.powerLevel))
+            ) {
+                await db.deletePermission(permToDelete.permissionID);
+                res.sendStatus(200);
                 return;
             }
-
-            const permissions = await db.retrievePermissions(
-                userDetails.userID,
-                permToDelete.resourceType,
-            );
-
-            for (const perm of permissions) {
-                // msg.data is resourceID
-                if (
-                    perm.resourceID === permToDelete.resourceID &&
-                    (perm.userID === userDetails.userID ||
-                        (perm.powerLevel > POWER_LEVELS.DELETE &&
-                            perm.powerLevel > permToDelete.powerLevel))
-                ) {
-                    await db.deletePermission(permToDelete.permissionID);
-                    res.sendStatus(200);
-                    return;
-                }
-            }
-            res.sendStatus(401);
-            return;
-        } catch (err: unknown) {
-            res.status(500).send(String(err));
         }
+        res.sendStatus(401);
     });
 
     api.post("/userList/:channelID", async (req, res) => {
         const userDetails = getUser(req);
         const channelID = getParam(req, "channelID");
 
-        try {
-            const channel = await db.retrieveChannel(channelID);
-            if (!channel) {
-                res.sendStatus(404);
+        const channel = await db.retrieveChannel(channelID);
+        if (!channel) {
+            res.sendStatus(404);
+            return;
+        }
+        const permissions = await db.retrievePermissions(
+            userDetails.userID,
+            "server",
+        );
+        for (const permission of permissions) {
+            if (permission.resourceID === channel.serverID) {
+                const groupMembers = await db.retrieveGroupMembers(channelID);
+                res.send(
+                    msgpack.encode(
+                        groupMembers.map((user) => censorUser(user)),
+                    ),
+                );
                 return;
             }
-            const permissions = await db.retrievePermissions(
-                userDetails.userID,
-                "server",
-            );
-            for (const permission of permissions) {
-                if (permission.resourceID === channel.serverID) {
-                    // we've got the permission, it's ok to give them the userlist
-                    const groupMembers =
-                        await db.retrieveGroupMembers(channelID);
-                    res.send(
-                        msgpack.encode(
-                            groupMembers.map((user) => censorUser(user)),
-                        ),
-                    );
-                }
-            }
-        } catch (err: unknown) {
-            log.error(String(err));
-            res.status(500).send(String(err));
         }
+        res.sendStatus(401);
     });
 
     api.post("/deviceList", protect, async (req, res) => {
@@ -557,12 +542,8 @@ export const initApp = (
             res.sendStatus(401);
             return;
         }
-        try {
-            const inbox = await db.retrieveMail(deviceDetails.deviceID);
-            res.send(msgpack.encode(inbox));
-        } catch (err: unknown) {
-            res.status(500).send(String(err));
-        }
+        const inbox = await db.retrieveMail(deviceDetails.deviceID);
+        res.send(msgpack.encode(inbox));
     });
 
     api.post("/device/:id/connect", protect, async (req, res) => {
@@ -603,14 +584,8 @@ export const initApp = (
             res.sendStatus(401);
             return;
         }
-
-        try {
-            const count = await db.getOTKCount(deviceDetails.deviceID);
-            res.send(msgpack.encode({ count }));
-            return;
-        } catch (err: unknown) {
-            res.status(500).send(String(err));
-        }
+        const count = await db.getOTKCount(deviceDetails.deviceID);
+        res.send(msgpack.encode({ count }));
     });
 
     api.post("/device/:id/otk", protect, async (req, res) => {
@@ -649,12 +624,8 @@ export const initApp = (
             return;
         }
 
-        try {
-            await db.saveOTK(userDetails.userID, deviceID, submittedOTKs);
-            res.sendStatus(200);
-        } catch (err: unknown) {
-            res.status(500).send(String(err));
-        }
+        await db.saveOTK(userDetails.userID, deviceID, submittedOTKs);
+        res.sendStatus(200);
     });
 
     api.get("/emoji/:emojiID/details", protect, async (req, res) => {
@@ -868,6 +839,12 @@ export const initApp = (
     api.use("/invite", inviteRouter);
 
     setupDocs(api);
+
+    // Central error handler MUST be last. Handles both thrown AppErrors
+    // (client-safe status + message) and programmer errors (generic 500
+    // with full details logged server-side). See src/server/errors.ts
+    // for the CWE mapping.
+    api.use(errorHandler(log));
 };
 
 /**

@@ -16,6 +16,7 @@ import { z } from "zod/v4";
 
 import { msgpack } from "../utils/msgpack.ts";
 
+import { uploadLimiter } from "./rateLimit.ts";
 import { getParam } from "./utils.ts";
 
 import { protect } from "./index.ts";
@@ -120,46 +121,52 @@ export const getFileRouter = (db: Database, log: winston.Logger) => {
         owner: z.string().min(1),
     });
 
-    router.post("/", protect, multer().single("file"), async (req, res) => {
-        const deviceDetails = req.device;
+    router.post(
+        "/",
+        uploadLimiter,
+        protect,
+        multer().single("file"),
+        async (req, res) => {
+            const deviceDetails = req.device;
 
-        if (!deviceDetails) {
-            res.sendStatus(400);
-            return;
-        }
+            if (!deviceDetails) {
+                res.sendStatus(400);
+                return;
+            }
 
-        const parsed = multipartFields.safeParse(req.body);
-        if (!parsed.success) {
-            res.status(400).json({
-                error: "Invalid file payload",
-                issues: parsed.error.issues,
-            });
-            return;
-        }
-        const payload = parsed.data;
+            const parsed = multipartFields.safeParse(req.body);
+            if (!parsed.success) {
+                res.status(400).json({
+                    error: "Invalid file payload",
+                    issues: parsed.error.issues,
+                });
+                return;
+            }
+            const payload = parsed.data;
 
-        if (req.file === undefined) {
-            res.sendStatus(400);
-            return;
-        }
+            if (req.file === undefined) {
+                res.sendStatus(400);
+                return;
+            }
 
-        if (payload.nonce === "") {
-            res.sendStatus(400);
-            return;
-        }
+            if (payload.nonce === "") {
+                res.sendStatus(400);
+                return;
+            }
 
-        const newFile: FileSQL = {
-            fileID: crypto.randomUUID(),
-            nonce: payload.nonce,
-            owner: payload.owner,
-        };
+            const newFile: FileSQL = {
+                fileID: crypto.randomUUID(),
+                nonce: payload.nonce,
+                owner: payload.owner,
+            };
 
-        await fsp.writeFile("files/" + newFile.fileID, req.file.buffer);
-        log.info("Wrote new file " + newFile.fileID);
+            await fsp.writeFile("files/" + newFile.fileID, req.file.buffer);
+            log.info("Wrote new file " + newFile.fileID);
 
-        await db.createFile(newFile);
-        res.send(msgpack.encode(newFile));
-    });
+            await db.createFile(newFile);
+            res.send(msgpack.encode(newFile));
+        },
+    );
 
     return router;
 };
