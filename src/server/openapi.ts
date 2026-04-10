@@ -10,40 +10,39 @@
  * The interactive viewers require unsafe-eval (AJV) and CDN scripts (Scalar),
  * so they are disabled in production. Raw JSON specs are always available.
  */
-import type express from "express";
-
-import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const require = createRequire(import.meta.url);
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import express from "express";
 
+import asyncApiSpec from "@vex-chat/types/asyncapi.json" with { type: "json" };
+import openApiSpec from "@vex-chat/types/openapi.json" with { type: "json" };
+
+import { apiReference } from "@scalar/express-api-reference";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isProduction = process.env["NODE_ENV"] === "production";
 
-export const setupDocs = (api: express.Application) => {
-    const openApiSpec = require("@vex-chat/types/openapi.json") as Record<string, unknown>;
-    const asyncApiSpec = require("@vex-chat/types/asyncapi.json") as Record<string, unknown>;
+const pkgDir = (pkg: string) =>
+    path.resolve(__dirname, "../../node_modules", pkg);
 
+export const setupDocs = (api: express.Application) => {
     // Raw JSON specs — always available (no CSP issues, machine-readable)
-    api.get("/openapi.json", (_req, res) => { res.json(openApiSpec); });
-    api.get("/asyncapi.json", (_req, res) => { res.json(asyncApiSpec); });
+    api.get("/openapi.json", (_req, res) => {
+        res.json(openApiSpec);
+    });
+    api.get("/asyncapi.json", (_req, res) => {
+        res.json(asyncApiSpec);
+    });
 
     if (isProduction) return;
 
     // Interactive viewers — development only (require unsafe-eval + CDN)
-    const { apiReference } = require("@scalar/express-api-reference") as {
-        apiReference: (opts: Record<string, unknown>) => express.RequestHandler;
-    };
-
-    api.use("/docs", apiReference({ url: "/openapi.json", theme: "purple" }));
-
+    api.use("/docs", apiReference({ theme: "purple", url: "/openapi.json" }));
+    api.use("/vendor", express.static(pkgDir("@asyncapi/web-component/lib")));
     api.use(
-        "/vendor",
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- express.static path
-        require("express").static(
-            path.resolve(__dirname, "../../node_modules/@asyncapi/web-component/lib"),
-        ),
+        "/assets",
+        express.static(pkgDir("@asyncapi/react-component/styles")),
     );
 
     api.get("/async-docs", (_req, res) => {

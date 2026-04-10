@@ -27,14 +27,14 @@ jobs:
             npm_config_engine_strict: "true"
         steps:
             - name: Harden Runner
-              uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176  # v2.17.0
+              uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
               with:
                   egress-policy: audit
 
-            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
             - name: Install mise
-              uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4.0.1
+              uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
 
             - name: Install dependencies
               run: npm ci --ignore-scripts
@@ -75,7 +75,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Harden Runner
-              uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176  # v2.17.0
+              uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
               with:
                   egress-policy: audit
             - name: POST deploy endpoint
