@@ -17,13 +17,14 @@ import type {
     Server,
     UserRecord,
 } from "@vex-chat/types";
+import type { Migration, MigrationProvider } from "kysely";
 import type winston from "winston";
 
 import { EventEmitter } from "events";
 import { pbkdf2Sync } from "node:crypto";
 import * as fs from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { xMakeNonce, XUtils } from "@vex-chat/crypto";
 import { MailType } from "@vex-chat/types";
@@ -42,21 +43,65 @@ function parseMailType(n: number): MailType {
 }
 
 import BetterSqlite3 from "better-sqlite3";
-import {
-    FileMigrationProvider,
-    Kysely,
-    Migrator,
-    sql,
-    SqliteDialect,
-} from "kysely";
+import { Kysely, Migrator, sql, SqliteDialect } from "kysely";
 import { stringify as uuidStringify, validate as uuidValidate } from "uuid";
 
 import { createLogger } from "./utils/createLogger.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// On Windows, dynamic import() needs file:// URLs, not bare paths like "D:\...".
-// pathToFileURL handles this cross-platform.
 const migrationFolder = path.join(__dirname, "migrations");
+
+/**
+ * Cross-platform Kysely migration provider.
+ *
+ * Replaces Kysely's built-in `FileMigrationProvider`, which on Windows
+ * fails with `ERR_UNSUPPORTED_ESM_URL_SCHEME` because it does
+ * `await import(joinedPath)` where `joinedPath` is a Windows absolute
+ * path like `D:\\spire\\src\\migrations\\schema.ts`. Node's ESM loader
+ * requires `file://` URLs for absolute paths on Windows.
+ *
+ * This implementation uses `pathToFileURL` to convert each migration
+ * file's absolute path to a `file://` URL before passing it to
+ * `import()`. Works on Linux, macOS, and Windows. Filters out `.d.ts`
+ * declaration files and accepts both `.ts` and `.js` source files for
+ * spire's `--experimental-strip-types` runtime.
+ */
+class CrossPlatformMigrationProvider implements MigrationProvider {
+    private readonly folder: string;
+
+    constructor(folder: string) {
+        this.folder = folder;
+    }
+
+    async getMigrations(): Promise<Record<string, Migration>> {
+        const files = await fs.readdir(this.folder);
+        const migrations: Record<string, Migration> = {};
+        for (const file of files.sort()) {
+            if (file.endsWith(".d.ts")) continue;
+            if (!file.endsWith(".ts") && !file.endsWith(".js")) continue;
+            const fullPath = path.join(this.folder, file);
+            const fileUrl = pathToFileURL(fullPath).href;
+            const mod: unknown = await import(fileUrl);
+            if (!isMigration(mod)) {
+                throw new Error(
+                    `Invalid migration ${file}: expected an exported \`up\` function`,
+                );
+            }
+            const name = file.replace(/\.(ts|js)$/, "");
+            migrations[name] = mod;
+        }
+        return migrations;
+    }
+}
+
+function isMigration(mod: unknown): mod is Migration {
+    return (
+        typeof mod === "object" &&
+        mod !== null &&
+        "up" in mod &&
+        typeof (mod as { up: unknown }).up === "function"
+    );
+}
 
 const pubkeyRegex = /[0-9a-f]{64}/;
 export const ITERATIONS = 1000;
@@ -808,7 +853,7 @@ export class Database extends EventEmitter {
     private async init(): Promise<void> {
         const migrator = new Migrator({
             db: this.db,
-            provider: new FileMigrationProvider({ fs, migrationFolder, path }),
+            provider: new CrossPlatformMigrationProvider(migrationFolder),
         });
         const { error } = await migrator.migrateToLatest();
         if (error) {
