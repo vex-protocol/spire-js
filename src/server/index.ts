@@ -473,7 +473,7 @@ export const initApp = (
         res.sendStatus(401);
     });
 
-    api.post("/userList/:channelID", async (req, res) => {
+    api.post("/userList/:channelID", protect, async (req, res) => {
         const userDetails = getUser(req);
         const channelID = getParam(req, "channelID");
 
