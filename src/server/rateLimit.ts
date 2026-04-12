@@ -38,14 +38,14 @@ const keyByIp = (req: Request): string => ipKeyGenerator(req.ip ?? "");
 /**
  * Global per-IP limiter. Applied app-wide via `api.use(globalLimiter)`.
  *
- * 300 requests per 15 minutes per client IP. A human chatting via a
+ * 3000 requests per 15 minutes per client IP. A human chatting via a
  * browser or the libvex client won't come close; a single-host DoS
  * gets throttled quickly.
  */
 export const globalLimiter = rateLimit({
     keyGenerator: keyByIp,
     legacyHeaders: false,
-    limit: 300,
+    limit: 3000,
     standardHeaders: "draft-7",
     windowMs: 15 * 60 * 1000,
 });
@@ -54,7 +54,7 @@ export const globalLimiter = rateLimit({
  * Strict auth endpoint limiter. Applied per-route to /auth, /register,
  * and /auth/device.
  *
- * 5 failed attempts per 15 minutes per IP. Successful logins don't
+ * 50 failed attempts per 15 minutes per IP. Successful logins don't
  * count (`skipSuccessfulRequests`), so a normal user doesn't lock
  * themselves out by fat-fingering a password once. Blocks brute force
  * (CWE-307) without harming UX.
@@ -62,7 +62,7 @@ export const globalLimiter = rateLimit({
 export const authLimiter = rateLimit({
     keyGenerator: keyByIp,
     legacyHeaders: false,
-    limit: 5,
+    limit: 50,
     skipSuccessfulRequests: true,
     standardHeaders: "draft-7",
     windowMs: 15 * 60 * 1000,
@@ -74,13 +74,13 @@ export const authLimiter = rateLimit({
  * upload attempts per minute so an attacker can't force spire to
  * spend CPU/IO on repeated large-body parses.
  *
- * 20 uploads per minute per IP — generous for a chat client (rapid-
+ * 200 uploads per minute per IP — generous for a chat client (rapid-
  * fire image attachments) but tight enough to shield the disk.
  */
 export const uploadLimiter = rateLimit({
     keyGenerator: keyByIp,
     legacyHeaders: false,
-    limit: 20,
+    limit: 200,
     standardHeaders: "draft-7",
     windowMs: 60 * 1000,
 });
