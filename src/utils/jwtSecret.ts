@@ -1,15 +1,14 @@
 /**
- * Returns the JWT signing secret.
+ * Returns the dedicated JWT HMAC signing secret.
  *
- * Prefers JWT_SECRET (dedicated HMAC key) over SPK (NaCl server signing key).
- * Falls back to SPK for backward compat with existing deployments.
+ * This MUST be a separate key from SPK (the Ed25519 server signing key)
+ * so that compromise of one does not affect the other.
  */
 export function getJwtSecret(): string {
-    const secret = process.env["JWT_SECRET"] ?? process.env["SPK"];
+    const secret = process.env["JWT_SECRET"];
     if (!secret) {
         throw new Error(
-            "Neither JWT_SECRET nor SPK is set. " +
-                "Set JWT_SECRET (preferred) or SPK in your environment.",
+            "JWT_SECRET is not set. Generate one with: node scripts/gen-spk.js",
         );
     }
     return secret;
