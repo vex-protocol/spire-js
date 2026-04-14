@@ -25,8 +25,10 @@ import * as fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { xMakeNonce, XUtils } from "@vex-chat/crypto";
+import { XUtils } from "@vex-chat/crypto";
 import { MailType } from "@vex-chat/types";
+
+import argon2 from "argon2";
 
 /**
  * Narrow a plain integer from the `mailType` SQL column to the
@@ -101,11 +103,18 @@ function isMigration(mod: unknown): mod is Migration {
 }
 
 const pubkeyRegex = /[0-9a-f]{64}/;
-export const ITERATIONS = 1000;
+
+/** Legacy iteration count kept only for verifying old PBKDF2 hashes. */
+const PBKDF2_ITERATIONS = 1000;
 
 // ── Row-to-interface converters ─────────────────────────────────────────
 // SQLite stores booleans as integers and dates as strings, but the
 // @vex-chat/types interfaces expect boolean / Date.
+
+/** Internal record that includes the hash algorithm discriminator. */
+export interface InternalUserRecord extends UserRecord {
+    hashAlgo: string;
+}
 
 export class Database extends EventEmitter {
     private db: Kysely<ServerDatabase>;
@@ -273,13 +282,12 @@ export class Database extends EventEmitter {
         regPayload: RegistrationPayload,
     ): Promise<[null | UserRecord, Error | null]> {
         try {
-            const salt = xMakeNonce();
-            const passwordHash = hashPassword(regPayload.password, salt);
+            const passwordHash = await hashPasswordArgon2(regPayload.password);
 
             const user: UserRecord = {
                 lastSeen: new Date().toISOString(),
-                passwordHash: passwordHash.toString("hex"),
-                passwordSalt: XUtils.encodeHex(salt),
+                passwordHash,
+                passwordSalt: "",
                 userID: uuidStringify(regKey),
                 username: regPayload.username,
             };
@@ -288,6 +296,7 @@ export class Database extends EventEmitter {
                 .insertInto("users")
                 .values({
                     ...user,
+                    hashAlgo: "argon2id",
                     lastSeen: user.lastSeen,
                 })
                 .execute();
@@ -501,6 +510,21 @@ export class Database extends EventEmitter {
             .updateTable("users")
             .set({ lastSeen: new Date().toISOString() })
             .where("userID", "=", user.userID)
+            .execute();
+    }
+
+    public async rehashPassword(
+        userID: string,
+        newHash: string,
+    ): Promise<void> {
+        await this.db
+            .updateTable("users")
+            .set({
+                hashAlgo: "argon2id",
+                passwordHash: newHash,
+                passwordSalt: "",
+            })
+            .where("userID", "=", userID)
             .execute();
     }
 
@@ -756,7 +780,7 @@ export class Database extends EventEmitter {
     // the identifier can be username, public key, or userID
     public async retrieveUser(
         userIdentifier: string,
-    ): Promise<null | UserRecord> {
+    ): Promise<InternalUserRecord | null> {
         let rows;
         if (uuidValidate(userIdentifier)) {
             rows = await this.db
@@ -788,7 +812,7 @@ export class Database extends EventEmitter {
         return rows.map(toDevice);
     }
 
-    public async retrieveUsers(): Promise<UserRecord[]> {
+    public async retrieveUsers(): Promise<InternalUserRecord[]> {
         const rows = await this.db.selectFrom("users").selectAll().execute();
         return rows.map(toUserRecord);
     }
@@ -857,6 +881,53 @@ export class Database extends EventEmitter {
     }
 }
 
+/**
+ * Hash a password with Argon2id (new default).
+ * Returns the encoded hash string which embeds salt, params, and digest.
+ */
+export async function hashPasswordArgon2(password: string): Promise<string> {
+    return argon2.hash(password, {
+        memoryCost: 65536,
+        parallelism: 4,
+        timeCost: 3,
+        type: argon2.argon2id,
+    });
+}
+
+/**
+ * Verify a password against either Argon2id or legacy PBKDF2 storage.
+ * Returns `{ valid, needsRehash }` — callers should rehash on success
+ * when `needsRehash` is true.
+ */
+export async function verifyPassword(
+    password: string,
+    stored: { hashAlgo: string; passwordHash: string; passwordSalt: string },
+): Promise<{ needsRehash: boolean; valid: boolean }> {
+    if (stored.hashAlgo === "argon2id") {
+        const valid = await argon2.verify(stored.passwordHash, password);
+        return { needsRehash: false, valid };
+    }
+
+    // Legacy PBKDF2 path
+    const salt = XUtils.decodeHex(stored.passwordSalt);
+    const computed = pbkdf2Sync(
+        password,
+        salt,
+        PBKDF2_ITERATIONS,
+        32,
+        "sha512",
+    );
+    const storedBuf = XUtils.decodeHex(stored.passwordHash);
+
+    if (computed.length !== storedBuf.length) {
+        return { needsRehash: false, valid: false };
+    }
+
+    const { timingSafeEqual } = await import("node:crypto");
+    const valid = timingSafeEqual(computed, storedBuf);
+    return { needsRehash: valid, valid };
+}
+
 function toDevice(row: {
     deleted: number;
     deviceID: string;
@@ -905,14 +976,12 @@ function toServer(row: {
 }
 
 function toUserRecord(row: {
+    hashAlgo: string;
     lastSeen: string;
     passwordHash: string;
     passwordSalt: string;
     userID: string;
     username: string;
-}): UserRecord {
+}): InternalUserRecord {
     return { ...row };
 }
-
-export const hashPassword = (password: string, salt: Uint8Array) =>
-    pbkdf2Sync(password, salt, ITERATIONS, 32, "sha512");

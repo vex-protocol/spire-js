@@ -3,7 +3,6 @@ import type { Server } from "http";
 
 import { EventEmitter } from "events";
 import { execSync } from "node:child_process";
-import { timingSafeEqual } from "node:crypto";
 import * as fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -30,7 +29,7 @@ import { WebSocketServer } from "ws";
 import { z } from "zod/v4";
 
 import { ClientManager } from "./ClientManager.ts";
-import { Database, hashPassword } from "./Database.ts";
+import { Database, hashPasswordArgon2, verifyPassword } from "./Database.ts";
 import { initApp, protect } from "./server/index.ts";
 import { authLimiter } from "./server/rateLimit.ts";
 import { censorUser, getParam, getUser } from "./server/utils.ts";
@@ -623,16 +622,19 @@ export class Spire extends EventEmitter {
                     return;
                 }
 
-                const salt = XUtils.decodeHex(userEntry.passwordSalt);
-                const payloadHash = hashPassword(password, salt);
-                const storedHash = XUtils.decodeHex(userEntry.passwordHash);
+                const { needsRehash, valid } = await verifyPassword(
+                    password,
+                    userEntry,
+                );
 
-                if (
-                    payloadHash.length !== storedHash.length ||
-                    !timingSafeEqual(payloadHash, storedHash)
-                ) {
+                if (!valid) {
                     res.sendStatus(401);
                     return;
+                }
+
+                if (needsRehash) {
+                    const newHash = await hashPasswordArgon2(password);
+                    await this.db.rehashPassword(userEntry.userID, newHash);
                 }
 
                 const token = jwt.sign(

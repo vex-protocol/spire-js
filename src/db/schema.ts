@@ -156,6 +156,7 @@ export type ServiceMetricUpdate = Updateable<ServiceMetricsTable>;
 
 export type UserRow = Selectable<UsersTable>;
 export interface UsersTable {
+    hashAlgo: string;
     lastSeen: string;
     passwordHash: string;
     passwordSalt: string;

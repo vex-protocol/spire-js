@@ -7,8 +7,8 @@ import eslintConfigPrettier from "eslint-config-prettier/flat";
 export default tseslint.config(
     ...tseslint.configs.strictTypeChecked,
     n.configs["flat/recommended"],
-    perfectionist.configs["recommended-natural"],
     {
+        plugins: { perfectionist },
         languageOptions: {
             parserOptions: {
                 projectService: true,

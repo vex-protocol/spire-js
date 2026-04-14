@@ -85,6 +85,7 @@
         "@scalar/express-api-reference": "0.9.7",
         "@vex-chat/crypto": "2.0.0",
         "@vex-chat/types": "2.0.0",
+        "argon2": "^0.44.0",
         "better-sqlite3": "11.10.0",
         "cors": "2.8.6",
         "dotenv": "17.4.1",
