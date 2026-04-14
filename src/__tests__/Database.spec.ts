@@ -5,7 +5,6 @@ import { XUtils } from "@vex-chat/crypto";
 
 import * as uuid from "uuid";
 import { describe, expect, it, vi } from "vitest";
-import winston from "winston";
 
 import { Database } from "../Database.ts";
 
@@ -26,19 +25,6 @@ vi.mock("uuid", () => ({
     v4: vi.fn(() => "93ce482b-a0f2-4f6e-b1df-3aed61073552"),
     validate: () => true,
 }));
-
-/** Winston logger stub — Database.close() calls `.info`, and `{}` breaks that. */
-function silentLogger(): winston.Logger {
-    const noop = vi.fn();
-    return {
-        debug: noop,
-        error: noop,
-        info: noop,
-        log: noop,
-        verbose: noop,
-        warn: noop,
-    } as unknown as winston.Logger;
-}
 
 describe("Database", () => {
     // Reusable test data
@@ -80,9 +66,6 @@ describe("Database", () => {
             expect.assertions(1);
 
             vi.mocked(uuid.v4).mockReturnValueOnce(keyID);
-            vi.spyOn(winston, "createLogger").mockReturnValueOnce(
-                silentLogger(),
-            );
 
             const provider = new Database(options);
             await new Promise<void>((resolve, reject) => {

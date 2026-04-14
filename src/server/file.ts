@@ -1,6 +1,5 @@
 import type { Database } from "../Database.ts";
 import type { FileSQL } from "@vex-chat/types";
-import type winston from "winston";
 
 import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
@@ -23,7 +22,7 @@ import { protect } from "./index.ts";
 
 const safePathParam = z.string().regex(/^[a-zA-Z0-9._-]+$/);
 
-export const getFileRouter = (db: Database, log: winston.Logger) => {
+export const getFileRouter = (db: Database) => {
     const router = express.Router();
 
     router.get("/:id", protect, async (req, res) => {
@@ -37,8 +36,8 @@ export const getFileRouter = (db: Database, log: winston.Logger) => {
             res.sendStatus(404);
         } else {
             const stream = fs.createReadStream("./files/" + entry.fileID);
-            stream.on("error", (err) => {
-                log.error(err.toString());
+            stream.on("error", (_err) => {
+                // debugger: file stream read error
                 res.sendStatus(500);
             });
             stream.pipe(res);
@@ -109,8 +108,6 @@ export const getFileRouter = (db: Database, log: winston.Logger) => {
         };
 
         await fsp.writeFile("files/" + newFile.fileID, buf);
-        log.info("Wrote new file " + newFile.fileID);
-
         await db.createFile(newFile);
         res.send(msgpack.encode(newFile));
     });
@@ -161,8 +158,6 @@ export const getFileRouter = (db: Database, log: winston.Logger) => {
             };
 
             await fsp.writeFile("files/" + newFile.fileID, req.file.buffer);
-            log.info("Wrote new file " + newFile.fileID);
-
             await db.createFile(newFile);
             res.send(msgpack.encode(newFile));
         },

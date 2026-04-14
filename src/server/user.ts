@@ -1,5 +1,4 @@
 import type { Database } from "../Database.ts";
-import type winston from "winston";
 
 import express from "express";
 
@@ -17,7 +16,6 @@ import { protect } from "./index.ts";
 
 export const getUserRouter = (
     db: Database,
-    log: winston.Logger,
     tokenValidator: (key: string, scope: TokenScopes) => boolean,
 ) => {
     const router = express.Router();
@@ -98,7 +96,6 @@ export const getUserRouter = (
         );
 
         if (!token) {
-            log.warn("Invalid signature on token.");
             res.sendStatus(400);
             return;
         }
@@ -110,9 +107,8 @@ export const getUserRouter = (
                     deviceData,
                 );
                 res.send(msgpack.encode(device));
-            } catch (err: unknown) {
-                log.warn(String(err));
-                // failed registration due to signkey being taken
+            } catch (_err: unknown) {
+                // signkey already taken
                 res.sendStatus(470);
                 return;
             }

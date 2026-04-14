@@ -18,7 +18,6 @@ function main() {
     new Spire(spk, {
         ...(apiPort !== undefined ? { apiPort: Number(apiPort) } : {}),
         ...(dbType !== undefined ? { dbType } : {}),
-        logLevel: "info",
     });
 }
 

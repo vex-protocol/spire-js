@@ -1,6 +1,3 @@
-import type { Database } from "../Database.ts";
-import type winston from "winston";
-
 import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 
@@ -20,7 +17,7 @@ import { ALLOWED_IMAGE_TYPES, protect } from "./index.ts";
 
 const safePathParam = z.string().regex(/^[a-zA-Z0-9._-]+$/);
 
-export const getAvatarRouter = (db: Database, log: winston.Logger) => {
+export const getAvatarRouter = () => {
     const router = express.Router();
 
     router.get("/:userID", async (req, res) => {
@@ -39,8 +36,8 @@ export const getAvatarRouter = (db: Database, log: winston.Logger) => {
         res.set("Cache-control", "public, max-age=31536000");
 
         const stream = fs.createReadStream(filePath);
-        stream.on("error", (err) => {
-            log.error(err.toString());
+        stream.on("error", (_err) => {
+            // debugger: avatar stream read error
             res.sendStatus(500);
         });
         stream.pipe(res);
@@ -65,7 +62,6 @@ export const getAvatarRouter = (db: Database, log: winston.Logger) => {
         }
 
         if (!payload.file) {
-            log.warn("MISSING FILE");
             res.sendStatus(400);
             return;
         }
@@ -84,10 +80,9 @@ export const getAvatarRouter = (db: Database, log: winston.Logger) => {
         try {
             // write the file to disk
             await fsp.writeFile("avatars/" + userDetails.userID, buf);
-            log.info("Wrote new avatar " + userDetails.userID);
             res.sendStatus(200);
-        } catch (err: unknown) {
-            log.warn(String(err));
+        } catch (_err: unknown) {
+            // debugger: avatar write failed
             res.sendStatus(500);
         }
     });
@@ -107,7 +102,6 @@ export const getAvatarRouter = (db: Database, log: winston.Logger) => {
             }
 
             if (!req.file) {
-                log.warn("MISSING FILE");
                 res.sendStatus(400);
                 return;
             }
@@ -128,10 +122,9 @@ export const getAvatarRouter = (db: Database, log: winston.Logger) => {
                     "avatars/" + userDetails.userID,
                     req.file.buffer,
                 );
-                log.info("Wrote new avatar " + userDetails.userID);
                 res.sendStatus(200);
-            } catch (err: unknown) {
-                log.warn(String(err));
+            } catch (_err: unknown) {
+                // debugger: avatar write failed
                 res.sendStatus(500);
             }
         },

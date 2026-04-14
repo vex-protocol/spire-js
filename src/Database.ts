@@ -18,7 +18,6 @@ import type {
     UserRecord,
 } from "@vex-chat/types";
 import type { Migration, MigrationProvider } from "kysely";
-import type winston from "winston";
 
 import { EventEmitter } from "events";
 import { pbkdf2Sync } from "node:crypto";
@@ -45,8 +44,6 @@ function parseMailType(n: number): MailType {
 import BetterSqlite3 from "better-sqlite3";
 import { Kysely, Migrator, sql, SqliteDialect } from "kysely";
 import { stringify as uuidStringify, validate as uuidValidate } from "uuid";
-
-import { createLogger } from "./utils/createLogger.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const migrationFolder = path.join(__dirname, "migrations");
@@ -112,12 +109,9 @@ export const ITERATIONS = 1000;
 
 export class Database extends EventEmitter {
     private db: Kysely<ServerDatabase>;
-    private log: winston.Logger;
 
     constructor(options?: SpireOptions) {
         super();
-
-        this.log = createLogger("spire-db", options?.logLevel || "error");
 
         const dbType = options?.dbType || "sqlite3";
 
@@ -151,7 +145,6 @@ export class Database extends EventEmitter {
     }
 
     public async close(): Promise<void> {
-        this.log.info("Closing database.");
         await this.db.destroy();
     }
 
@@ -489,8 +482,8 @@ export class Database extends EventEmitter {
         try {
             await sql`select 1 as ok`.execute(this.db);
             return true;
-        } catch (err: unknown) {
-            this.log.warn("Database health check failed: " + String(err));
+        } catch (_err: unknown) {
+            // debugger: health check failed
             return false;
         }
     }

@@ -9,8 +9,7 @@
  *   (which include database internals, file paths, and stack traces)
  *   back to the client. The new pattern: throw `AppError(status, msg)`
  *   or let an unknown error propagate, and the single 4-arg middleware
- *   below converts it into a JSON response with a generic message
- *   while logging the full internals server-side via winston.
+ *   below converts it into a JSON response with a generic message.
  *
  * - **CWE-79 / CWE-116 — Exception text reinterpreted as HTML.** Express's
  *   default finalhandler sends thrown `Error` objects as
@@ -27,7 +26,6 @@
  * `express-async-errors` shim needed.
  */
 import type { ErrorRequestHandler } from "express";
-import type winston from "winston";
 
 import { randomUUID } from "node:crypto";
 
@@ -39,8 +37,7 @@ import { ZodError } from "zod/v4";
  * - `status` — HTTP status code (400, 401, 403, 404, 409, etc.)
  * - `message` — client-safe message, MUST NOT contain request data
  *   (route params, body fields, query strings). Anything operator-
- *   only (database errors, file paths) belongs in winston logs, not
- *   in this string.
+ *   only (database errors, file paths) should not appear in this string.
  *
  * Anything that isn't an `AppError` (raw `Error`, `TypeError`, a
  * rejected promise from a DB query, etc.) is treated by the central
@@ -68,8 +65,7 @@ export class AppError extends Error {
  *     api.use(errorHandler(log));
  */
 export const errorHandler =
-    (log: winston.Logger): ErrorRequestHandler =>
-    (err, req, res, _next) => {
+    (): ErrorRequestHandler => (err, _req, res, _next) => {
         // If headers already went out there's nothing safe to do except
         // let Express's default handler close the socket.
         if (res.headersSent) {
@@ -93,31 +89,6 @@ export const errorHandler =
         } else if (err instanceof AppError) {
             status = err.status;
             clientMessage = err.message;
-        }
-
-        // Log the full internals server-side. `err instanceof Error` also
-        // catches AppError (extends Error), so we get stacks and messages
-        // for every branch in the logs.
-        if (err instanceof Error) {
-            log.error("request failed", {
-                error: {
-                    message: err.message,
-                    name: err.name,
-                    stack: err.stack,
-                },
-                method: req.method,
-                path: req.path,
-                requestId,
-                status,
-            });
-        } else {
-            log.error("request failed", {
-                error: String(err),
-                method: req.method,
-                path: req.path,
-                requestId,
-                status,
-            });
         }
 
         // ALWAYS JSON — prevents the exception-text-as-HTML XSS vector.

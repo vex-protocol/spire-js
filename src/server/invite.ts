@@ -1,6 +1,5 @@
 import type { Database } from "../Database.ts";
 import type { TokenScopes } from "@vex-chat/types";
-import type winston from "winston";
 
 import express from "express";
 
@@ -12,7 +11,6 @@ import { protect } from "./index.ts";
 
 export const getInviteRouter = (
     db: Database,
-    log: winston.Logger,
     tokenValidator: (key: string, scope: TokenScopes) => boolean,
     notify: (
         userID: string,

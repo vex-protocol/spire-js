@@ -1,6 +1,5 @@
 import type { ActionToken, BaseMsg, NotifyMsg, User } from "@vex-chat/types";
 import type { Server } from "http";
-import type winston from "winston";
 
 import { EventEmitter } from "events";
 import { execSync } from "node:child_process";
@@ -35,7 +34,6 @@ import { Database, hashPassword } from "./Database.ts";
 import { initApp, protect } from "./server/index.ts";
 import { authLimiter } from "./server/rateLimit.ts";
 import { censorUser, getParam, getUser } from "./server/utils.ts";
-import { createLogger } from "./utils/createLogger.ts";
 import { getJwtSecret } from "./utils/jwtSecret.ts";
 import { msgpack } from "./utils/msgpack.ts";
 
@@ -131,14 +129,6 @@ const getCommitSha = (): string => {
 export interface SpireOptions {
     apiPort?: number;
     dbType?: "mysql" | "sqlite3" | "sqlite3mem" | "sqlite";
-    logLevel?:
-        | "debug"
-        | "error"
-        | "http"
-        | "info"
-        | "silly"
-        | "verbose"
-        | "warn";
 }
 
 export class Spire extends EventEmitter {
@@ -152,9 +142,6 @@ export class Spire extends EventEmitter {
         string,
         { deviceID: string; nonce: string; time: number }
     >();
-    private log: winston.Logger;
-    private options: SpireOptions | undefined;
-
     private queuedRequestIncrements = 0;
     private requestsTotal = 0;
 
@@ -184,17 +171,12 @@ export class Spire extends EventEmitter {
         this.db = new Database(options);
         this.db.on("ready", () => {
             this.dbReady = true;
-            this.bootstrapRequestCounter().catch((err: unknown) => {
-                this.log.error(
-                    "Failed to load persisted request counter: " + String(err),
-                );
+            this.bootstrapRequestCounter().catch((_err: unknown) => {
+                // debugger: bootstrap request counter failed
             });
         });
 
-        this.log = createLogger("spire", options?.logLevel || "error");
         this.init(options?.apiPort || 16777);
-
-        this.options = options;
     }
 
     public async close(): Promise<void> {
@@ -202,18 +184,9 @@ export class Spire extends EventEmitter {
             ws.terminate();
         });
 
-        this.wss.on("close", () => {
-            this.log.info("ws: closed.");
-        });
-
-        this.server?.on("close", () => {
-            this.log.info("http: closed.");
-        });
-
         this.server?.close();
         this.wss.close();
         await this.db.close();
-        return;
     }
 
     private async bootstrapRequestCounter(): Promise<void> {
@@ -250,11 +223,8 @@ export class Spire extends EventEmitter {
             if (!this.requestsTotalLoaded) {
                 this.queuedRequestIncrements += 1;
             } else {
-                this.db.incrementRequestsTotal(1).catch((err: unknown) => {
-                    this.log.warn(
-                        "Failed to persist request counter increment: " +
-                            String(err),
-                    );
+                this.db.incrementRequestsTotal(1).catch((_err: unknown) => {
+                    // debugger: failed to persist request counter
                 });
             }
 
@@ -265,7 +235,6 @@ export class Spire extends EventEmitter {
         initApp(
             this.api,
             this.db,
-            this.log,
             this.validateToken.bind(this),
             this.signKeys,
             this.notify.bind(this),
@@ -273,11 +242,9 @@ export class Spire extends EventEmitter {
 
         // WS auth: client sends { type: "auth", token } as first message
         this.wss.on("connection", (ws) => {
-            this.log.info("WS connection established, waiting for auth...");
             const AUTH_TIMEOUT = 10_000;
 
             const timer = setTimeout(() => {
-                this.log.warn("WS auth timeout — closing.");
                 ws.close();
             }, AUTH_TIMEOUT);
 
@@ -312,47 +279,27 @@ export class Spire extends EventEmitter {
                     }
                     const userDetails: User = jwtResult.data.user;
 
-                    this.log.info(
-                        "WS auth succeeded for " + userDetails.username,
-                    );
-
                     const client = new ClientManager(
                         ws,
                         this.db,
                         this.notify.bind(this),
                         userDetails,
-                        this.options,
                     );
 
                     client.on("fail", () => {
-                        this.log.info(
-                            "Client connection is down, removing: " +
-                                client.toString(),
-                        );
                         if (this.clients.includes(client)) {
                             this.clients.splice(
                                 this.clients.indexOf(client),
                                 1,
                             );
                         }
-                        this.log.info(
-                            "Current authorized clients: " +
-                                String(this.clients.length),
-                        );
                     });
 
                     client.on("authed", () => {
-                        this.log.info(
-                            "New client authorized: " + client.toString(),
-                        );
                         this.clients.push(client);
-                        this.log.info(
-                            "Current authorized clients: " +
-                                String(this.clients.length),
-                        );
                     });
-                } catch (err: unknown) {
-                    this.log.warn("WS auth failed: " + String(err));
+                } catch (_err: unknown) {
+                    // debugger: WS auth failed
                     const errMsg: BaseMsg = {
                         transmissionID: crypto.randomUUID(),
                         type: "unauthorized",
@@ -425,9 +372,7 @@ export class Spire extends EventEmitter {
                 }
 
                 try {
-                    this.log.info("New token requested of type " + tokenType);
                     const token = this.createActionToken(scope);
-                    this.log.info("New token created: " + token.key);
 
                     setTimeout(() => {
                         this.deleteActionToken(token);
@@ -445,8 +390,8 @@ export class Spire extends EventEmitter {
 
                     res.set("Content-Type", "application/msgpack");
                     return res.send(msgpack.encode(token));
-                } catch (err: unknown) {
-                    this.log.error(String(err));
+                } catch (_err: unknown) {
+                    // debugger: token creation failed
                     return res.sendStatus(500);
                 }
             },
@@ -535,12 +480,11 @@ export class Spire extends EventEmitter {
                     this.deviceChallenges.delete(challengeID);
                 }, DEVICE_CHALLENGE_EXPIRY);
 
-                this.log.info("Device challenge issued for " + deviceID);
                 return res.send(
                     msgpack.encode({ challenge: nonce, challengeID }),
                 );
-            } catch (err: unknown) {
-                this.log.error("Device challenge error: " + String(err));
+            } catch (_err: unknown) {
+                // debugger: device challenge error
                 return res.sendStatus(500);
             }
         });
@@ -611,18 +555,11 @@ export class Spire extends EventEmitter {
                     getJwtSecret(),
                     { expiresIn: DEVICE_AUTH_JWT_EXPIRY },
                 );
-                this.log.info(
-                    "Device-key auth succeeded for " +
-                        user.username +
-                        " (device " +
-                        device.deviceID +
-                        ")",
-                );
                 return res.send(
                     msgpack.encode({ token, user: censorUser(user) }),
                 );
-            } catch (err: unknown) {
-                this.log.error("Device verify error: " + String(err));
+            } catch (_err: unknown) {
+                // debugger: device verify error
                 return res.sendStatus(500);
             }
         });
@@ -651,8 +588,6 @@ export class Spire extends EventEmitter {
                 senderDeviceDetails.deviceID,
                 authorUserDetails.userID,
             );
-            this.log.info("Received mail for " + mail.recipient);
-
             const recipientDeviceDetails = await this.db.retrieveDevice(
                 mail.recipient,
             );
@@ -712,8 +647,8 @@ export class Spire extends EventEmitter {
                 res.send(
                     msgpack.encode({ token, user: censorUser(userEntry) }),
                 );
-            } catch (err: unknown) {
-                this.log.error(String(err));
+            } catch (_err: unknown) {
+                // debugger: auth error
                 res.sendStatus(500);
             }
         });
@@ -766,9 +701,6 @@ export class Spire extends EventEmitter {
                                     "users_signkey_unique",
                                 );
 
-                                this.log.warn(
-                                    "User attempted to register duplicate account.",
-                                );
                                 if (usernameConflict) {
                                     res.status(400).send({
                                         error: "Username is already registered.",
@@ -786,16 +718,10 @@ export class Spire extends EventEmitter {
                                 });
                                 break;
                             default:
-                                this.log.info(
-                                    "Unsupported sql error type: " +
-                                        String(errCode),
-                                );
-                                this.log.error(String(err));
                                 res.sendStatus(500);
                                 break;
                         }
                     } else {
-                        this.log.info("Registration success.");
                         if (!user) {
                             res.sendStatus(500);
                             return;
@@ -807,15 +733,13 @@ export class Spire extends EventEmitter {
                         error: "Invalid or no token supplied.",
                     });
                 }
-            } catch (err: unknown) {
-                this.log.error("error registering user: " + String(err));
+            } catch (_err: unknown) {
+                // debugger: registration error
                 res.sendStatus(500);
             }
         });
 
-        this.server = this.api.listen(apiPort, () => {
-            this.log.info("API started on port " + String(apiPort));
-        });
+        this.server = this.api.listen(apiPort);
 
         // Accept all WS upgrades — auth happens post-connection.
         this.server.on("upgrade", (req, socket, head) => {
@@ -858,7 +782,6 @@ export class Spire extends EventEmitter {
     }
 
     private validateToken(key: string, scope: TokenScopes): boolean {
-        this.log.info("Validating token: " + key);
         for (const rKey of this.actionTokens) {
             if (rKey.key === key) {
                 if (rKey.scope !== scope) {
@@ -866,17 +789,12 @@ export class Spire extends EventEmitter {
                 }
 
                 const age = Date.now() - new Date(rKey.time).getTime();
-                this.log.info("Token found, " + String(age) + " ms old.");
                 if (age < TOKEN_EXPIRY) {
-                    this.log.info("Token is valid.");
                     this.deleteActionToken(rKey);
                     return true;
-                } else {
-                    this.log.info("Token is expired.");
                 }
             }
         }
-        this.log.info("Token not found.");
         return false;
     }
 }
