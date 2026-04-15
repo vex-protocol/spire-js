@@ -13,20 +13,9 @@ Reference server implementation for the [Vex](https://vex.wtf) protocol.
 
 ## What's in the box
 
-- **REST API** (Express 5) for auth, registration, users, servers, channels, invites, and file upload.
-- **WebSocket server** (native `ws`) for real-time messaging, presence, and push notifications. The first client message is JSON (`{ type: 'auth', token }`); after that, binary frames use msgpack (32-byte header + body) per the AsyncAPI spec in `@vex-chat/types`.
-- **SQLite persistence** via Kysely + better-sqlite3. Single-file DB, zero external services.
-- **Runtime validation** at trust boundaries: REST bodies and route params go through Zod (`safeParse` / regex-backed path segments where used). WebSocket mail payloads use `MailWSSchema` from `@vex-chat/types`; other WS message kinds are checked structurally (size limits, UUIDs, crypto verify) rather than a single Zod envelope for every frame.
-- **Interactive docs** — [Scalar](https://scalar.com) at `/docs` for the OpenAPI spec, the [AsyncAPI web component](https://www.asyncapi.com) at `/async-docs` for the WebSocket protocol. Interactive viewers are **disabled when `NODE_ENV=production`** (they rely on relaxed CSP / CDN scripts); raw `/openapi.json` and `/asyncapi.json` stay available.
-- **Authentication** via `@vex-chat/crypto` signing keys plus JWT session tokens. **New passwords** are hashed with **Argon2id** (`argon2`); **legacy accounts** still verify with **PBKDF2** (`node:crypto`), then transparently rehash to Argon2id on successful login.
+- **REST API** (Express 5) for full e2e messaging including auth, registration, users, servers, channels, invites, and file upload.
 
 ## Install
-
-From public npm:
-
-```sh
-npm install @vex-chat/spire
-```
 
 Or clone the repo:
 
