@@ -121,6 +121,32 @@ jobs:
             - name: Type coverage
               run: npx type-coverage
 
+    docker:
+        name: Docker
+        runs-on: ubuntu-latest
+        steps:
+            - name: Harden Runner
+              uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+              with:
+                  egress-policy: audit
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              with:
+                  persist-credentials: false
+            - name: Create .env
+              run: |
+                  printf 'SPK=%s\nJWT_SECRET=%s\nDB_TYPE=sqlite3mem\n' \
+                    "$(openssl rand -hex 64)" "$(openssl rand -hex 32)" > .env
+            - name: Build and start
+              run: docker compose up -d --build --wait --wait-timeout 60
+            - name: Smoke test
+              run: curl -sf http://localhost:8080/status
+            - name: Logs on failure
+              if: failure()
+              run: docker compose logs
+            - name: Teardown
+              if: always()
+              run: docker compose down -v
+
     supply-chain:
         name: Supply Chain
         runs-on: ubuntu-latest
@@ -157,6 +183,7 @@ jobs:
             - test
             - lint
             - types
+            - docker
             - supply-chain
         runs-on: ubuntu-latest
         steps:
