@@ -14,7 +14,6 @@ import cors from "cors";
 import { fileTypeFromBuffer, fileTypeFromFile } from "file-type";
 import helmet from "helmet";
 import jwt from "jsonwebtoken";
-import morgan from "morgan";
 import multer from "multer";
 import parseDuration from "parse-duration";
 import { stringify as uuidStringify } from "uuid";
@@ -197,10 +196,6 @@ export const initApp = (
     api.use(msgpackParser);
     api.use(checkAuth);
     api.use(checkDevice);
-
-    if (!jestRun()) {
-        api.use(morgan("dev", { stream: process.stdout }));
-    }
 
     const allowedOrigins = process.env["CORS_ORIGINS"]?.split(",") ?? [];
     api.use(
@@ -843,11 +838,4 @@ export const initApp = (
     // with full details logged server-side). See src/server/errors.ts
     // for the CWE mapping.
     api.use(errorHandler());
-};
-
-/**
- * @ignore
- */
-const jestRun = () => {
-    return process.env["JEST_WORKER_ID"] !== undefined;
 };

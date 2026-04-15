@@ -1,0 +1,58 @@
+services:
+  spire:
+    build: .
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - spire-data:/data
+    env_file: .env
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - internal
+    restart: unless-stopped
+    logging:
+      driver: none
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:16777/status"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      spire:
+        condition: service_healthy
+    networks:
+      - internal
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /run
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    restart: unless-stopped
+    logging:
+      driver: none
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  spire-data:
