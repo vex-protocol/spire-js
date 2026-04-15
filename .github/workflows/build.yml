@@ -16,26 +16,6 @@ env:
     npm_config_engine_strict: "true"
 
 jobs:
-    build-and-test:
-        name: Build & Test (Docker)
-        runs-on: ubuntu-latest
-        steps:
-            - name: Harden Runner
-              uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
-              with:
-                  egress-policy: audit
-            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-              with:
-                  persist-credentials: false
-            - name: Build CI image
-              run: docker build --target ci -t spire-ci .
-            - name: Build production image
-              run: docker build -t spire-prod .
-            - name: tsc
-              run: docker run --rm spire-ci npx tsc
-            - name: Vitest
-              run: docker run --rm spire-ci npx vitest run
-
     checks:
         name: Lint / Types / Supply Chain
         runs-on: ubuntu-latest
@@ -70,14 +50,35 @@ jobs:
               env:
                   SOCKET_SECURITY_API_KEY: ${{ secrets.SOCKET_API_KEY }}
 
+    build-and-test:
+        name: Build & Test (Docker)
+        needs: checks
+        runs-on: ubuntu-latest
+        steps:
+            - name: Harden Runner
+              uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+              with:
+                  egress-policy: audit
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              with:
+                  persist-credentials: false
+            - name: Build Docker images
+              run: |
+                  docker build --target ci -t spire-ci .
+                  docker build -t spire .
+            - name: tsc
+              run: docker run --rm spire-ci npx tsc
+            - name: Vitest
+              run: docker run --rm spire-ci npx vitest run
+
     # ── Single aggregator — the only required status check ────────────────
 
     ci-ok:
         name: CI OK
         if: always()
         needs:
-            - build-and-test
             - checks
+            - build-and-test
         runs-on: ubuntu-latest
         steps:
             - name: Fail if any upstream job failed, was skipped, or cancelled
