@@ -67,9 +67,9 @@ jobs:
                   docker build --target ci -t spire-ci .
                   docker build -t spire .
             - name: tsc
-              run: docker run --rm spire-ci npx tsc
+              run: docker run --rm -w /app spire-ci npx tsc
             - name: Vitest
-              run: docker run --rm spire-ci npx vitest run
+              run: docker run --rm -w /app spire-ci npx vitest run
 
     # ── Single aggregator — the only required status check ────────────────
 

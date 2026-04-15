@@ -7,6 +7,7 @@ RUN apk add --no-cache python3 make g++
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
+COPY tsconfig.json vitest.config.ts ./
 COPY src ./src
 
 # ── CI target — stop here for testing (has devDeps) ─────────────────────
