@@ -58,11 +58,11 @@ Spire reads configuration from environment variables. **Docker Compose:** put th
 
 ### Required
 
-| Variable     | Description                                                                                                                                                                                                                                                               |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SPK`        | Server private key, hex-encoded. Generate with `npm run gen-spk` (prints `SPK` and `JWT_SECRET` lines). Used for server identity signing (NaCl).                                                                                                                          |
-| `JWT_SECRET` | Hex or string used as the **HMAC secret for JWTs** — **required** and must be **separate from `SPK`**. `npm run gen-spk` emits a dedicated value; do not reuse `SPK` here.                                                                                                |
-| `DB_TYPE`    |  `sqlite3` or `sqlite3mem`. All values use **SQLite** via `better-sqlite3` (file or `:memory:`). |
+| Variable     | Description                                                                                                                                                                |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SPK`        | Server private key, hex-encoded. Generate with `npm run gen-spk` (prints `SPK` and `JWT_SECRET` lines). Used for server identity signing (NaCl).                           |
+| `JWT_SECRET` | Hex or string used as the **HMAC secret for JWTs** — **required** and must be **separate from `SPK`**. `npm run gen-spk` emits a dedicated value; do not reuse `SPK` here. |
+| `DB_TYPE`    | `sqlite3` or `sqlite3mem`. All values use **SQLite** via `better-sqlite3` (file or `:memory:`).                                                                            |
 
 ### Optional
 

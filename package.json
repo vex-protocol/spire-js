@@ -86,7 +86,7 @@
     "dependencies": {
         "@asyncapi/web-component": "2.6.5",
         "@scalar/express-api-reference": "0.9.7",
-        "@vex-chat/crypto": "2.0.0",
+        "@vex-chat/crypto": "2.0.1",
         "@vex-chat/types": "2.0.0",
         "argon2": "0.44.0",
         "better-sqlite3": "11.10.0",
