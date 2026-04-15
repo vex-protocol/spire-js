@@ -424,7 +424,12 @@ export class Spire extends EventEmitter {
             const checkDurationMs = Date.now() - started;
 
             const ok = dbHealthy;
+            const canaryEnv = process.env["CANARY"]?.trim().toLowerCase();
             res.json({
+                canary:
+                    canaryEnv === "1" ||
+                    canaryEnv === "true" ||
+                    canaryEnv === "yes",
                 checkDurationMs,
                 commitSha: this.commitSha,
                 dbHealthy,

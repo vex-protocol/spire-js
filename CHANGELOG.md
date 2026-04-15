@@ -1,5 +1,13 @@
 # @vex-chat/spire
 
+## 1.0.1
+
+### Patch Changes
+
+- d262b02: Rate limits are now 10x higher across all tiers: the global per-IP limit rises from 300 to 3 000 requests per 15 minutes, the auth endpoint limit rises from 5 to 50 failed attempts per 15 minutes, and the upload limit rises from 20 to 200 requests per minute. No config changes required — limits take effect on the next server start.
+- ebea78f: HTTP request logging via `morgan` has been removed from the server. Operators who relied on per-request log lines in stdout should add their own logging middleware after calling `initApp`.
+- 0b7005c: Passwords are now hashed with argon2id (via a transparent on-login migration from the previous algorithm). JWT tokens are signed with a dedicated secret instead of reusing the server's persistent key pair, so all existing sessions will be invalidated on upgrade — users will need to log in again.
+
 ## 1.0.0
 
 ### Major Changes

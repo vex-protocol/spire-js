@@ -194,7 +194,7 @@ const endpointOverrides = {
     "get /status": {
         summary: "Detailed runtime status",
         description:
-            "Operational status endpoint including uptime, build metadata, health-check timing, and basic runtime counters.",
+            "Operational status endpoint including uptime, build metadata, health-check timing, basic runtime counters, and boolean `canary` from env `CANARY`.",
         responses: {
             200: {
                 description: "Detailed status payload.",
@@ -203,6 +203,7 @@ const endpointOverrides = {
                         schema: {
                             type: "object",
                             properties: {
+                                canary: { type: "boolean" },
                                 ok: { type: "boolean" },
                                 uptimeSeconds: { type: "integer" },
                                 startedAt: {
@@ -226,6 +227,7 @@ const endpointOverrides = {
                                 dbHealthy: { type: "boolean" },
                             },
                             required: [
+                                "canary",
                                 "ok",
                                 "uptimeSeconds",
                                 "startedAt",
