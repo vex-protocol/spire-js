@@ -1,0 +1,2412 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Spire stress — live harness</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Instrument+Serif:ital@0;1&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            :root {
+                --bg0: #06060a;
+                --bg1: #0e0e14;
+                --card: #13131c;
+                --card2: #1a1a26;
+                --border: rgba(255, 255, 255, 0.06);
+                --text: #ececf1;
+                --muted: #8b8b9a;
+                --accent: #5eead4;
+                --accent2: #a78bfa;
+                --danger: #fb7185;
+                --warn: #fbbf24;
+                --ok: #34d399;
+                --idle: #52525b;
+                --radius: 14px;
+                --shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+                --font: "DM Sans", system-ui, sans-serif;
+                --serif: "Instrument Serif", Georgia, serif;
+            }
+            * {
+                box-sizing: border-box;
+            }
+            html,
+            body {
+                margin: 0;
+                min-height: 100%;
+                background:
+                    radial-gradient(
+                        ellipse 120% 80% at 50% -30%,
+                        rgba(94, 234, 212, 0.09),
+                        transparent
+                    ),
+                    radial-gradient(
+                        ellipse 80% 50% at 100% 0%,
+                        rgba(167, 139, 250, 0.07),
+                        transparent
+                    ),
+                    var(--bg0);
+                color: var(--text);
+                font-family: var(--font);
+                font-size: 15px;
+                line-height: 1.45;
+            }
+            /* Shared page shell: dashboard + Issues use the same inset and max width */
+            .wrap,
+            .wrap-wide {
+                max-width: 1280px;
+                margin: 0 auto;
+                padding: 20px 22px 80px;
+                box-sizing: border-box;
+            }
+            /* Below hero nav: digital cluster (segment bar + LCD readout) + session controls */
+            .stress-control-strip {
+                position: sticky;
+                top: 0;
+                z-index: 20;
+                margin: 0 0 26px;
+                padding: 16px 18px 18px;
+                border-radius: var(--radius);
+                background: linear-gradient(
+                    165deg,
+                    rgba(16, 16, 24, 0.98) 0%,
+                    rgba(12, 12, 18, 0.92) 50%,
+                    rgba(14, 14, 22, 0.96) 100%
+                );
+                border: 1px solid rgba(255, 255, 255, 0.07);
+                box-shadow: var(--shadow);
+            }
+            .stress-control-strip__inner {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: flex-end;
+                gap: 20px 28px;
+            }
+            .stress-meter-panel {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: flex-end;
+                gap: 12px 20px;
+                min-width: min(100%, 280px);
+            }
+            .stress-run-meter {
+                --rpm-seg-count: 40;
+            }
+            .rpm-gauge {
+                position: relative;
+                width: min(280px, 100%);
+                flex-shrink: 0;
+            }
+            /* S2000-ish: dark bezel + horizontal LED bar + LCD digits */
+            .rpm-led-housing {
+                border-radius: 6px;
+                padding: 10px 12px 8px;
+                background: linear-gradient(
+                    180deg,
+                    #08080c 0%,
+                    #0e0e14 40%,
+                    #0a0a10 100%
+                );
+                border: 1px solid rgba(255, 255, 255, 0.09);
+                box-shadow:
+                    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+                    0 4px 18px rgba(0, 0, 0, 0.5);
+            }
+            .rpm-seg-track-wrap {
+                position: relative;
+                margin-bottom: 6px;
+            }
+            .rpm-seg-green-hint {
+                position: absolute;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                width: 40%;
+                border-radius: 2px 0 0 2px;
+                background: linear-gradient(
+                    90deg,
+                    rgba(34, 197, 94, 0.14),
+                    transparent
+                );
+                pointer-events: none;
+            }
+            .rpm-seg-redline {
+                position: absolute;
+                right: 0;
+                top: 0;
+                bottom: 0;
+                width: 20%;
+                border-radius: 0 2px 2px 0;
+                background: linear-gradient(
+                    90deg,
+                    transparent,
+                    rgba(220, 38, 38, 0.12)
+                );
+                pointer-events: none;
+            }
+            .rpm-segbar {
+                display: flex;
+                align-items: stretch;
+                gap: 2px;
+                height: 38px;
+                padding: 0 2px;
+            }
+            .rpm-seg {
+                flex: 1;
+                min-width: 0;
+                height: 100%;
+                align-self: stretch;
+                border-radius: 2px;
+                background: rgba(18, 18, 26, 0.98);
+                box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.55);
+                transition:
+                    background 0.12s ease,
+                    box-shadow 0.12s ease;
+            }
+            .rpm-seg.rpm-seg--greenzone.rpm-seg--lit {
+                background: linear-gradient(
+                    180deg,
+                    #86efac 0%,
+                    #22c55e 50%,
+                    #15803d 100%
+                );
+                box-shadow:
+                    0 0 8px rgba(34, 197, 94, 0.45),
+                    inset 0 -1px 0 rgba(0, 0, 0, 0.25);
+            }
+            .rpm-seg.rpm-seg--amberzone.rpm-seg--lit {
+                background: linear-gradient(
+                    180deg,
+                    #fde68a 0%,
+                    #f59e0b 55%,
+                    #d97706 100%
+                );
+                box-shadow:
+                    0 0 8px rgba(251, 191, 36, 0.45),
+                    inset 0 -1px 0 rgba(0, 0, 0, 0.25);
+            }
+            .rpm-seg.rpm-seg--redzone.rpm-seg--lit {
+                background: linear-gradient(
+                    180deg,
+                    #fecaca 0%,
+                    #ef4444 50%,
+                    #b91c1c 100%
+                );
+                box-shadow:
+                    0 0 10px rgba(248, 113, 113, 0.55),
+                    inset 0 -1px 0 rgba(0, 0, 0, 0.3);
+            }
+            .rpm-scale {
+                display: flex;
+                justify-content: space-between;
+                font-size: 0.58rem;
+                font-weight: 600;
+                letter-spacing: 0.06em;
+                color: rgba(148, 163, 184, 0.75);
+                font-variant-numeric: tabular-nums;
+            }
+            .rpm-digital-block {
+                margin-top: 12px;
+                text-align: center;
+                max-width: 280px;
+            }
+            .rpm-live-label {
+                display: block;
+                font-size: 0.62rem;
+                font-weight: 700;
+                letter-spacing: 0.18em;
+                text-transform: uppercase;
+                color: rgba(148, 163, 184, 0.85);
+                margin-bottom: 6px;
+            }
+            .stress-run-meter.on .rpm-live-label {
+                color: rgba(52, 211, 153, 0.9);
+            }
+            .rpm-readout-line {
+                display: flex;
+                align-items: baseline;
+                justify-content: center;
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+            .rpm-readout-val {
+                font-family:
+                    ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+                font-size: clamp(1.85rem, 4.5vw, 2.65rem);
+                font-weight: 700;
+                font-variant-numeric: tabular-nums;
+                letter-spacing: 0.06em;
+                line-height: 1;
+                color: rgba(100, 116, 139, 0.55);
+                text-shadow: none;
+            }
+            .stress-run-meter.on .rpm-readout-val {
+                color: #6ee7b7;
+                text-shadow:
+                    0 0 12px rgba(52, 211, 153, 0.35),
+                    0 0 28px rgba(16, 185, 129, 0.2);
+            }
+            .stress-run-meter:not(.on) .rpm-readout-val {
+                color: var(--muted);
+            }
+            .rpm-readout-unit {
+                font-size: 0.78rem;
+                font-weight: 600;
+                color: var(--muted);
+            }
+            .rpm-caption {
+                margin: 8px 0 0;
+                font-size: 0.68rem;
+                line-height: 1.4;
+                color: var(--muted);
+                opacity: 0.92;
+                max-width: 36em;
+            }
+            .stress-control-divider {
+                width: 1px;
+                min-height: 48px;
+                background: linear-gradient(
+                    180deg,
+                    transparent,
+                    var(--border),
+                    transparent
+                );
+                align-self: center;
+                display: none;
+            }
+            @media (min-width: 900px) {
+                .stress-control-divider {
+                    display: block;
+                }
+            }
+            .stress-control-form-wrap {
+                flex: 1;
+                min-width: min(100%, 280px);
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+            .stress-control-form-wrap .restart-hint {
+                margin: 0;
+                font-size: 0.72rem;
+                line-height: 1.35;
+            }
+            .restart-form--inline {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 10px 14px;
+                align-items: flex-end;
+            }
+            .restart-form--inline .restart-field {
+                margin: 0;
+            }
+            .restart-form--inline .restart-field label {
+                margin-bottom: 3px;
+            }
+            .restart-form--inline .restart-field input,
+            .restart-form--inline .restart-field select {
+                min-width: 0;
+                width: 100%;
+                max-width: 110px;
+            }
+            .restart-form--inline #restartBurstGapWrap input {
+                max-width: 100px;
+            }
+            .restart-form--inline .restart-actions {
+                margin-left: auto;
+            }
+            .restart-form--inline .restart-actions button {
+                white-space: nowrap;
+            }
+            header.hero {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: flex-end;
+                justify-content: space-between;
+                gap: 20px;
+                margin-bottom: 32px;
+            }
+            .hero-main {
+                flex: 1;
+                min-width: min(100%, 320px);
+            }
+            .app-top-nav {
+                margin-bottom: 14px;
+                font-size: 0.84rem;
+                font-weight: 600;
+            }
+            .app-top-nav a {
+                color: var(--accent);
+                text-decoration: none;
+            }
+            .app-top-nav a:hover {
+                text-decoration: underline;
+            }
+            .app-top-nav .nav-slash {
+                color: var(--border);
+                margin: 0 10px;
+                font-weight: 400;
+            }
+            .hero h1 {
+                margin: 0 0 6px;
+                font-family: var(--serif);
+                font-weight: 400;
+                font-size: clamp(2rem, 4vw, 2.75rem);
+                letter-spacing: -0.02em;
+                background: linear-gradient(
+                    120deg,
+                    var(--text) 0%,
+                    var(--accent) 45%,
+                    var(--accent2) 100%
+                );
+                -webkit-background-clip: text;
+                background-clip: text;
+                color: transparent;
+            }
+            .hero .sub {
+                color: var(--muted);
+                font-size: 0.95rem;
+                max-width: 520px;
+            }
+            .live-pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                padding: 8px 14px;
+                border-radius: 999px;
+                background: var(--card);
+                border: 1px solid var(--border);
+                font-size: 0.8rem;
+                font-weight: 600;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+                color: var(--muted);
+            }
+            .live-pill .dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background: var(--idle);
+                box-shadow: 0 0 0 0 rgba(52, 211, 153, 0);
+            }
+            .live-pill.on .dot {
+                background: var(--ok);
+                animation: pulse 2s ease infinite;
+            }
+            /* Issues nav pill (narrow layout) */
+            @keyframes pulse {
+                0%,
+                100% {
+                    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.5);
+                }
+                50% {
+                    box-shadow: 0 0 0 8px rgba(52, 211, 153, 0);
+                }
+            }
+            .stats {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+                gap: 12px;
+                margin-bottom: 28px;
+            }
+            .stat {
+                background: linear-gradient(145deg, var(--card), var(--card2));
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                padding: 16px 18px;
+                box-shadow: var(--shadow);
+            }
+            .stat .k {
+                font-size: 0.72rem;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                color: var(--muted);
+                margin-bottom: 6px;
+            }
+            .stat .v {
+                font-size: 1.35rem;
+                font-weight: 700;
+                font-variant-numeric: tabular-nums;
+            }
+            h2.sec {
+                font-size: 0.75rem;
+                text-transform: uppercase;
+                letter-spacing: 0.14em;
+                color: var(--muted);
+                margin: 36px 0 14px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            h2.sec::after {
+                content: "";
+                flex: 1;
+                height: 1px;
+                background: linear-gradient(90deg, var(--border), transparent);
+            }
+            .facet-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+                gap: 12px;
+            }
+            .facet {
+                background: var(--card);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                padding: 16px 16px 16px 18px;
+                display: grid;
+                grid-template-columns: auto 1fr;
+                gap: 12px 14px;
+                align-items: start;
+                cursor: default;
+            }
+            .led {
+                width: 12px;
+                height: 12px;
+                border-radius: 50%;
+                margin-top: 4px;
+                flex-shrink: 0;
+            }
+            .led.idle {
+                background: var(--idle);
+            }
+            .led.ok {
+                background: var(--ok);
+                box-shadow: 0 0 14px rgba(52, 211, 153, 0.55);
+            }
+            .led.warn {
+                background: var(--warn);
+                box-shadow: 0 0 14px rgba(251, 191, 36, 0.45);
+            }
+            .led.fail {
+                background: var(--danger);
+                box-shadow: 0 0 16px rgba(251, 113, 133, 0.55);
+            }
+            .facet .title {
+                font-weight: 600;
+                font-size: 1rem;
+                margin: 0 0 4px;
+            }
+            .facet .protocol {
+                font-family:
+                    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+                    monospace;
+                font-size: 0.8rem;
+                font-weight: 500;
+                color: var(--accent);
+                word-break: break-word;
+                margin: 0 0 4px;
+                line-height: 1.35;
+            }
+            .facet .api {
+                font-family:
+                    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+                    monospace;
+                font-size: 0.78rem;
+                color: var(--accent);
+                opacity: 0.95;
+                word-break: break-all;
+                margin-bottom: 6px;
+            }
+            .facet .desc {
+                font-size: 0.82rem;
+                color: var(--muted);
+                margin: 0;
+            }
+            .facet .counts {
+                grid-column: 2;
+                font-size: 0.75rem;
+                color: var(--muted);
+                font-variant-numeric: tabular-nums;
+            }
+            .facet .counts strong {
+                color: var(--text);
+                font-weight: 600;
+            }
+            .failures {
+                background: var(--card);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                overflow: hidden;
+                box-shadow: var(--shadow);
+            }
+            .failures .head {
+                padding: 14px 18px;
+                border-bottom: 1px solid var(--border);
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+            .failures .head h3 {
+                margin: 0;
+                font-size: 0.85rem;
+                font-weight: 600;
+            }
+            .fail-list {
+                max-height: 420px;
+                overflow-y: auto;
+            }
+            .fail-row {
+                padding: 12px 18px;
+                border-bottom: 1px solid var(--border);
+                cursor: pointer;
+                display: grid;
+                grid-template-columns: 1fr minmax(100px, 180px) auto;
+                gap: 8px 12px;
+                align-items: start;
+                transition: background 0.12s;
+            }
+            .fail-row .surf {
+                font-family:
+                    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+                    monospace;
+                font-size: 0.72rem;
+                color: var(--accent);
+                word-break: break-all;
+                line-height: 1.35;
+                padding-top: 2px;
+            }
+            .fail-row:hover {
+                background: rgba(255, 255, 255, 0.03);
+            }
+            .fail-row:last-child {
+                border-bottom: none;
+            }
+            .fail-row .msg {
+                font-size: 0.88rem;
+                color: #fecdd3;
+            }
+            .fail-row .meta {
+                font-size: 0.72rem;
+                color: var(--muted);
+                text-align: right;
+                white-space: nowrap;
+            }
+            .tag {
+                display: inline-block;
+                padding: 2px 8px;
+                border-radius: 6px;
+                font-size: 0.7rem;
+                font-weight: 600;
+                letter-spacing: 0.02em;
+                background: rgba(167, 139, 250, 0.15);
+                color: var(--accent2);
+                margin-right: 6px;
+            }
+            footer.note {
+                margin-top: 48px;
+                font-size: 0.78rem;
+                color: var(--muted);
+                text-align: center;
+            }
+            .view-root.hidden {
+                display: none !important;
+            }
+            #issuesListShell.hidden,
+            #issuesDetailShell.hidden {
+                display: none !important;
+            }
+            .llm-md {
+                max-height: min(70vh, 720px);
+                overflow-y: auto;
+                margin: 0;
+                padding: 14px 16px;
+                background: linear-gradient(165deg, #0a0a12 0%, #07070e 100%);
+                border-radius: 10px;
+                border: 1px solid var(--border);
+                font-size: 0.88rem;
+                line-height: 1.55;
+                color: #d6d6de;
+            }
+            .md-body h1,
+            .md-body h2,
+            .md-body h3 {
+                font-family: var(--serif);
+                font-weight: 400;
+                margin: 0.75em 0 0.3em;
+                line-height: 1.25;
+                color: var(--text);
+            }
+            .md-body h2 {
+                font-size: 1.05rem;
+                color: var(--accent);
+            }
+            .md-body h3 {
+                font-size: 0.95rem;
+                color: var(--accent2);
+            }
+            .md-body p {
+                margin: 0.45em 0;
+            }
+            .md-body ul {
+                margin: 0.35em 0 0.5em;
+                padding-left: 1.2rem;
+            }
+            .md-body code,
+            .md-body .md-code code {
+                font-family:
+                    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+                    monospace;
+                font-size: 0.82em;
+                background: rgba(167, 139, 250, 0.12);
+                padding: 0.1em 0.32em;
+                border-radius: 4px;
+                color: #e8e4ff;
+            }
+            .md-body pre.md-code {
+                margin: 0.5em 0;
+                padding: 10px 12px;
+                background: #050508;
+                border-radius: 8px;
+                border: 1px solid rgba(255, 255, 255, 0.06);
+                overflow-x: auto;
+            }
+            .issue-detail-card {
+                background: var(--card);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                padding: 16px 18px;
+                margin-bottom: 14px;
+            }
+            .issue-detail-card h3 {
+                margin: 0 0 10px;
+                font-size: 0.72rem;
+                text-transform: uppercase;
+                letter-spacing: 0.1em;
+                color: var(--muted);
+            }
+            .issue-pre {
+                margin: 0;
+                padding: 12px 14px;
+                background: #0a0a10;
+                border-radius: 10px;
+                border: 1px solid var(--border);
+                font-size: 0.76rem;
+                line-height: 1.45;
+                overflow-x: auto;
+                white-space: pre-wrap;
+                word-break: break-word;
+                max-height: 280px;
+                overflow-y: auto;
+            }
+            .pending-pill {
+                display: inline-block;
+                padding: 3px 10px;
+                border-radius: 6px;
+                font-size: 0.68rem;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                background: rgba(251, 191, 36, 0.15);
+                color: var(--warn);
+            }
+            .nav-inline {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 12px 18px;
+                margin-bottom: 14px;
+            }
+            .nav-inline a,
+            .nav-inline button.linkish {
+                color: var(--accent);
+                text-decoration: none;
+                font-size: 0.9rem;
+                font-weight: 600;
+                background: none;
+                border: none;
+                cursor: pointer;
+                font-family: inherit;
+                padding: 0;
+            }
+            .nav-inline a:hover,
+            .nav-inline button.linkish:hover {
+                text-decoration: underline;
+            }
+            .issues-hero {
+                margin-bottom: 22px;
+            }
+            .issues-hero h1 {
+                font-family: var(--serif);
+                font-weight: 400;
+                font-size: 1.65rem;
+                margin: 0 0 8px;
+                letter-spacing: -0.02em;
+            }
+            .issues-hero p {
+                margin: 0;
+                color: var(--muted);
+                font-size: 0.92rem;
+                max-width: 720px;
+            }
+            .occ-badge {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                min-width: 44px;
+                padding: 8px 12px;
+                border-radius: 12px;
+                font-size: 1.05rem;
+                font-weight: 800;
+                font-variant-numeric: tabular-nums;
+                color: var(--accent);
+                background: rgba(94, 234, 212, 0.1);
+                border: 1px solid rgba(94, 234, 212, 0.22);
+            }
+            .sheet-wrap {
+                background: var(--card);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                overflow: hidden;
+                box-shadow: var(--shadow);
+            }
+            .sheet-scroll {
+                overflow-x: auto;
+                overflow-y: visible;
+                padding-left: 18px;
+                padding-right: 18px;
+                box-sizing: border-box;
+            }
+            .sheet {
+                min-width: 560px;
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 0.8rem;
+            }
+            .sheet thead th {
+                text-align: left;
+                padding: 14px 16px;
+                background: rgba(0, 0, 0, 0.35);
+                color: var(--muted);
+                font-weight: 600;
+                font-size: 0.68rem;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                border-bottom: 1px solid var(--border);
+                position: sticky;
+                top: 0;
+                z-index: 2;
+            }
+            .sheet tbody tr.sheet-row {
+                cursor: pointer;
+                border-bottom: 1px solid var(--border);
+                transition: background 0.12s;
+            }
+            .sheet tbody tr.sheet-row:hover {
+                background: rgba(255, 255, 255, 0.04);
+            }
+            .sheet tbody tr.sheet-row.focus {
+                outline: 1px solid rgba(94, 234, 212, 0.35);
+                outline-offset: -1px;
+            }
+            .sheet td {
+                padding: 14px 16px;
+                vertical-align: top;
+                color: #e2e2ea;
+            }
+            .sheet td.n {
+                font-variant-numeric: tabular-nums;
+                font-weight: 700;
+                color: var(--accent);
+                width: 56px;
+            }
+            .sheet td.td-occ {
+                vertical-align: middle;
+                width: 1%;
+                white-space: nowrap;
+            }
+            .sheet .mono {
+                font-family:
+                    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+                    monospace;
+                font-size: 0.72rem;
+                word-break: break-all;
+                line-height: 1.35;
+            }
+            .sheet .msg-cell {
+                color: #fecdd3;
+                max-width: 340px;
+            }
+            .param-heat {
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+            }
+            .param-key {
+                font-size: 0.65rem;
+                color: var(--accent2);
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+            }
+            .param-val-row {
+                display: grid;
+                grid-template-columns: 1fr 40px;
+                gap: 6px;
+                align-items: center;
+                font-size: 0.68rem;
+            }
+            .param-val-row .v {
+                color: var(--muted);
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .param-mini {
+                height: 5px;
+                border-radius: 99px;
+                background: rgba(255, 255, 255, 0.07);
+                overflow: hidden;
+                margin-top: 2px;
+            }
+            .param-mini > i {
+                display: block;
+                height: 100%;
+                border-radius: 99px;
+                background: linear-gradient(
+                    90deg,
+                    rgba(94, 234, 212, 0.5),
+                    var(--accent)
+                );
+            }
+            tr.sheet-detail td {
+                background: #08080f;
+                padding: 0;
+                border-bottom: 1px solid var(--border);
+            }
+            .sheet-detail-inner {
+                padding: 14px 16px 18px;
+                max-height: 320px;
+                overflow: auto;
+            }
+            .sheet-detail-inner pre {
+                margin: 0;
+                font-size: 0.72rem;
+                line-height: 1.45;
+                color: #c4c8d4;
+            }
+            .sheet-actions {
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+                margin-bottom: 10px;
+            }
+            .sheet-actions button {
+                background: var(--card2);
+                border: 1px solid var(--border);
+                color: var(--text);
+                padding: 6px 12px;
+                border-radius: 8px;
+                font-size: 0.75rem;
+                cursor: pointer;
+                font-family: inherit;
+            }
+            .sheet-actions button:hover {
+                border-color: var(--accent);
+            }
+            .cell-actions a {
+                color: var(--accent);
+                font-weight: 600;
+                font-size: 0.78rem;
+                text-decoration: none;
+            }
+            .cell-actions a:hover {
+                text-decoration: underline;
+            }
+            .issue-list-title {
+                font-weight: 600;
+                font-size: 0.92rem;
+                line-height: 1.35;
+                color: var(--text);
+                font-family: Georgia, "Times New Roman", ui-serif, serif;
+                letter-spacing: 0.01em;
+            }
+            .issue-list-sub {
+                margin-top: 5px;
+                font-size: 0.72rem;
+                color: var(--muted);
+                line-height: 1.4;
+            }
+            .issue-list-sub code {
+                font-size: 0.68rem;
+                color: var(--accent2);
+            }
+            .issue-api-short {
+                font-size: 0.78rem;
+                color: #c8cad6;
+                line-height: 1.4;
+                max-width: 220px;
+            }
+            .mini-pill {
+                display: inline-block;
+                margin-left: 8px;
+                padding: 2px 7px;
+                border-radius: 99px;
+                font-size: 0.62rem;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                vertical-align: middle;
+                background: rgba(94, 234, 212, 0.12);
+                color: var(--accent);
+                border: 1px solid rgba(94, 234, 212, 0.25);
+            }
+            .param-heat-wrap {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 12px 18px;
+                align-items: flex-start;
+            }
+            .facet-issue-line {
+                margin: 10px 0 0;
+                font-size: 0.74rem;
+                line-height: 1.5;
+                color: var(--muted);
+            }
+            a.facet-issue-tag {
+                color: var(--accent);
+                font-weight: 600;
+                text-decoration: none;
+                vertical-align: middle;
+            }
+            a.facet-issue-tag:hover {
+                text-decoration: underline;
+            }
+            .facet-issue-sep {
+                color: var(--border);
+                margin: 0 6px;
+                font-weight: 400;
+            }
+            .facet-issue-more {
+                color: var(--muted);
+                font-size: 0.68rem;
+                margin-left: 4px;
+            }
+            .dash-fail-foot {
+                padding: 10px 18px 14px;
+                font-size: 0.74rem;
+                color: var(--muted);
+                border-top: 1px solid var(--border);
+                background: rgba(0, 0, 0, 0.2);
+            }
+            .restart-hint {
+                font-size: 0.82rem;
+                color: var(--muted);
+                margin: 0 0 14px;
+                line-height: 1.45;
+            }
+            .restart-form {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 12px 18px;
+                align-items: flex-end;
+            }
+            .restart-field label {
+                display: block;
+                font-size: 0.68rem;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                color: var(--accent2);
+                margin-bottom: 4px;
+            }
+            .restart-field input,
+            .restart-field select {
+                min-width: 88px;
+                padding: 6px 10px;
+                border-radius: 6px;
+                border: 1px solid var(--border);
+                background: #0f1118;
+                color: #e8e9ef;
+                font-size: 0.88rem;
+            }
+            .restart-actions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 10px;
+                align-items: center;
+            }
+            .restart-actions button {
+                padding: 8px 16px;
+                border-radius: 8px;
+                border: 1px solid rgba(94, 234, 212, 0.45);
+                background: rgba(94, 234, 212, 0.12);
+                color: var(--accent);
+                font-weight: 600;
+                cursor: pointer;
+                font-size: 0.88rem;
+            }
+            .restart-actions button:disabled {
+                opacity: 0.45;
+                cursor: not-allowed;
+            }
+            .restart-status {
+                margin: 12px 0 0;
+                font-size: 0.82rem;
+                color: var(--accent);
+            }
+            .restart-status.err {
+                color: #f87171;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="viewDashboard" class="view-root">
+            <div class="wrap" id="appWrap">
+                <header class="hero">
+                    <div class="hero-main">
+                        <nav class="app-top-nav" aria-label="Stress views">
+                            <a href="#/">Stress run</a
+                            ><span class="nav-slash" aria-hidden="true">/</span
+                            ><a href="#/issues">Issues</a>
+                        </nav>
+                        <h1>Spire stress harness</h1>
+                        <p class="sub">
+                            Facet LEDs · counts ·
+                            <a href="#/issues">Issues</a> for grouped errors.
+                            Throughput and restart below.
+                        </p>
+                    </div>
+                </header>
+
+                <section
+                    class="stress-control-strip"
+                    id="stressControlStrip"
+                    aria-label="Live run and session controls"
+                >
+                    <div class="stress-control-strip__inner">
+                        <div
+                            class="stress-meter-panel stress-run-meter"
+                            id="livePill"
+                        >
+                            <div
+                                class="rpm-gauge"
+                                id="rpmGauge"
+                                data-gauge-max="1000"
+                                data-gauge-segments="40"
+                            >
+                                <div class="rpm-led-housing">
+                                    <div class="rpm-seg-track-wrap">
+                                        <div
+                                            class="rpm-seg-green-hint"
+                                            aria-hidden="true"
+                                        ></div>
+                                        <div
+                                            class="rpm-seg-redline"
+                                            aria-hidden="true"
+                                        ></div>
+                                        <div
+                                            class="rpm-segbar"
+                                            id="rpmSegBar"
+                                            role="presentation"
+                                        ></div>
+                                    </div>
+                                    <div class="rpm-scale">
+                                        <span>0</span>
+                                        <span id="rpmGaugeScaleMid">500</span>
+                                        <span id="rpmGaugeScaleMax">1000</span>
+                                    </div>
+                                </div>
+                                <div class="rpm-digital-block">
+                                    <span id="liveText" class="rpm-live-label"
+                                        >Connecting…</span
+                                    >
+                                    <div class="rpm-readout-line">
+                                        <span
+                                            class="rpm-readout-val"
+                                            id="meterTouchPerSec"
+                                            >—</span
+                                        >
+                                        <span class="rpm-readout-unit"
+                                            >touches/s · ~1s</span
+                                        >
+                                    </div>
+                                    <p class="rpm-caption">
+                                        Scale max
+                                        <strong id="rpmGaugeMaxLabel"
+                                            >1000</strong
+                                        >
+                                        touches/s (cosmetic).
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div
+                            class="stress-control-divider"
+                            aria-hidden="true"
+                        ></div>
+                        <div class="stress-control-form-wrap">
+                            <p class="restart-hint">
+                                <strong>Restart</strong> after this wall (SSE
+                                stays up).
+                            </p>
+                            <form
+                                id="restartForm"
+                                class="restart-form restart-form--inline"
+                                autocomplete="off"
+                            >
+                                <div class="restart-field">
+                                    <label for="restartClients">Clients</label>
+                                    <input
+                                        id="restartClients"
+                                        name="clientCount"
+                                        type="number"
+                                        min="1"
+                                        max="500"
+                                        step="1"
+                                        required
+                                    />
+                                </div>
+                                <div class="restart-field">
+                                    <label for="restartConcurrency">Conc</label>
+                                    <input
+                                        id="restartConcurrency"
+                                        name="concurrency"
+                                        type="number"
+                                        min="1"
+                                        max="5000"
+                                        step="1"
+                                        required
+                                    />
+                                </div>
+                                <div class="restart-field">
+                                    <label for="restartLoadPacing"
+                                        >Wall pacing</label
+                                    >
+                                    <select
+                                        id="restartLoadPacing"
+                                        name="loadPacing"
+                                    >
+                                        <option value="immediate">
+                                            Immediate
+                                        </option>
+                                        <option value="paced">Paced</option>
+                                    </select>
+                                </div>
+                                <div
+                                    class="restart-field"
+                                    id="restartBurstGapWrap"
+                                >
+                                    <label for="restartBurstGap">Gap ms</label>
+                                    <input
+                                        id="restartBurstGap"
+                                        name="burstGapMs"
+                                        type="number"
+                                        min="0"
+                                        max="300000"
+                                        step="1"
+                                        value="750"
+                                    />
+                                </div>
+                                <div class="restart-actions">
+                                    <button type="submit" id="restartSubmit">
+                                        Queue restart
+                                    </button>
+                                </div>
+                            </form>
+                            <p
+                                id="restartStatus"
+                                class="restart-status"
+                                hidden
+                            ></p>
+                        </div>
+                    </div>
+                </section>
+
+                <div class="stats" id="stats"></div>
+
+                <h2 class="sec">Bootstrap</h2>
+                <div class="facet-grid" id="gridBootstrap"></div>
+
+                <h2 class="sec">Shared world</h2>
+                <div class="facet-grid" id="gridWorld"></div>
+
+                <h2 class="sec">Load — API under test</h2>
+                <div class="facet-grid" id="gridLoad"></div>
+
+                <h2 class="sec" style="margin-top: 28px">Issues (preview)</h2>
+                <p
+                    style="
+                        font-size: 0.82rem;
+                        color: var(--muted);
+                        margin: -8px 0 12px;
+                    "
+                >
+                    Top groups · batched updates.
+                </p>
+                <div class="failures" style="margin-bottom: 8px">
+                    <div
+                        class="fail-list"
+                        id="groupList"
+                        style="max-height: 220px"
+                    ></div>
+                    <p id="groupListFoot" class="dash-fail-foot" hidden></p>
+                </div>
+
+                <h2 class="sec" style="margin-top: 28px">Failures</h2>
+                <div class="failures">
+                    <div class="head">
+                        <h3>
+                            Recent errors
+                            <span
+                                id="failCount"
+                                style="color: var(--muted)"
+                            ></span>
+                        </h3>
+                        <span style="font-size: 0.78rem; color: var(--muted)">
+                            <a
+                                href="#/issues"
+                                id="openIssues"
+                                style="color: var(--accent); font-weight: 600"
+                                >All issues</a
+                            >
+                            · newest 12 here
+                        </span>
+                    </div>
+                    <div class="fail-list" id="failList"></div>
+                    <p id="failListFoot" class="dash-fail-foot" hidden></p>
+                </div>
+
+                <footer class="note">
+                    Static
+                    <code style="color: var(--accent)"
+                        >scripts/stress/web/index.html</code
+                    >
+                    ·
+                    <code style="color: var(--accent)">npm run stress:web</code>
+                    · fatal bundle
+                    <code style="color: var(--accent)"
+                        >~/.spire-stress/last-issue-bundle.json</code
+                    >
+                </footer>
+            </div>
+        </div>
+
+        <div id="viewIssues" class="view-root hidden" aria-hidden="true">
+            <div class="wrap-wide">
+                <nav class="nav-inline" aria-label="Stress views">
+                    <a href="#/" class="linkish">Stress run</a>
+                    <span style="color: var(--border)">|</span>
+                    <a href="#/issues" class="linkish">Issues</a>
+                    <span style="color: var(--border)">|</span>
+                    <span class="live-pill" id="livePillIssues"
+                        ><span class="dot"></span
+                        ><span id="liveTextIssues">…</span></span
+                    >
+                </nav>
+                <div id="issuesListShell">
+                    <header class="issues-hero">
+                        <h1>Issues</h1>
+                        <p>
+                            By frequency. Row →
+                            <code style="color: var(--accent2)"
+                                >#/issue/&lt;id&gt;</code
+                            >.
+                        </p>
+                    </header>
+                    <section class="sheet-wrap">
+                        <div class="sheet-scroll">
+                            <table class="sheet" id="issuesSheet">
+                                <thead>
+                                    <tr>
+                                        <th>Occurrences</th>
+                                        <th>Incident</th>
+                                        <th>API</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="issuesSheetBody"></tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+                <div id="issuesDetailShell" class="hidden">
+                    <div id="issueDetailMount"></div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            const els = {
+                appWrap: document.getElementById("appWrap"),
+                livePill: document.getElementById("livePill"),
+                liveText: document.getElementById("liveText"),
+                rpmGauge: document.getElementById("rpmGauge"),
+                rpmGaugeMaxLabel: document.getElementById("rpmGaugeMaxLabel"),
+                meterTouchPerSec: document.getElementById("meterTouchPerSec"),
+                stats: document.getElementById("stats"),
+                gridBootstrap: document.getElementById("gridBootstrap"),
+                gridWorld: document.getElementById("gridWorld"),
+                gridLoad: document.getElementById("gridLoad"),
+                groupList: document.getElementById("groupList"),
+                failList: document.getElementById("failList"),
+                failListFoot: document.getElementById("failListFoot"),
+                failCount: document.getElementById("failCount"),
+                groupListFoot: document.getElementById("groupListFoot"),
+                viewDashboard: document.getElementById("viewDashboard"),
+                viewIssues: document.getElementById("viewIssues"),
+                issuesSheetBody: document.getElementById("issuesSheetBody"),
+                livePillIssues: document.getElementById("livePillIssues"),
+                liveTextIssues: document.getElementById("liveTextIssues"),
+                issuesListShell: document.getElementById("issuesListShell"),
+                issuesDetailShell: document.getElementById("issuesDetailShell"),
+                issueDetailMount: document.getElementById("issueDetailMount"),
+                restartForm: document.getElementById("restartForm"),
+                restartClients: document.getElementById("restartClients"),
+                restartConcurrency:
+                    document.getElementById("restartConcurrency"),
+                restartLoadPacing: document.getElementById("restartLoadPacing"),
+                restartBurstGap: document.getElementById("restartBurstGap"),
+                restartBurstGapWrap: document.getElementById(
+                    "restartBurstGapWrap",
+                ),
+                restartStatus: document.getElementById("restartStatus"),
+                restartSubmit: document.getElementById("restartSubmit"),
+            };
+            function clearRpmSegments() {
+                const bar = document.getElementById("rpmSegBar");
+                if (!bar) {
+                    return;
+                }
+                bar.querySelectorAll(".rpm-seg").forEach((el) => {
+                    el.classList.remove("rpm-seg--lit");
+                });
+            }
+
+            (function initRpmGauge() {
+                const g = els.rpmGauge;
+                const lab = els.rpmGaugeMaxLabel;
+                const bar = document.getElementById("rpmSegBar");
+                const midEl = document.getElementById("rpmGaugeScaleMid");
+                const maxScaleEl = document.getElementById("rpmGaugeScaleMax");
+                const max = Number(g?.dataset.gaugeMax || "1000") || 1000;
+                if (lab) {
+                    lab.textContent = String(max);
+                }
+                if (midEl) {
+                    midEl.textContent = String(Math.round(max / 2));
+                }
+                if (maxScaleEl) {
+                    maxScaleEl.textContent = String(max);
+                }
+                const segCount = Math.max(
+                    8,
+                    Math.min(
+                        64,
+                        Number(g?.dataset.gaugeSegments || "40") || 40,
+                    ),
+                );
+                if (g && bar) {
+                    bar.replaceChildren();
+                    const greenTo = Math.floor(segCount * 0.4);
+                    const redFrom = Math.floor(segCount * 0.8);
+                    for (let i = 0; i < segCount; i++) {
+                        const s = document.createElement("span");
+                        s.className = "rpm-seg";
+                        if (i < greenTo) {
+                            s.classList.add("rpm-seg--greenzone");
+                        } else if (i >= redFrom) {
+                            s.classList.add("rpm-seg--redzone");
+                        } else {
+                            s.classList.add("rpm-seg--amberzone");
+                        }
+                        bar.appendChild(s);
+                    }
+                    g.dataset.rpmSegCount = String(segCount);
+                }
+                clearRpmSegments();
+            })();
+            let lastSnap = null;
+            let restartFormSeeded = false;
+            let expandedCorrelation = null;
+            let issuesUiLastPaint = 0;
+            let issuesUiTimer = null;
+
+            const DASH_FAIL_MAX_ROWS = 12;
+            const DASH_GROUP_MAX_ROWS = 10;
+            const DASH_AUX_PAINT_MS = 2400;
+            let dashAuxLastPaint = 0;
+            let dashAuxTimer = null;
+            let dashAuxPendingSnap = null;
+
+            function esc(s) {
+                const d = document.createElement("div");
+                d.textContent = s;
+                return d.innerHTML;
+            }
+
+            function facetTitleBySurfaceKey(snap, surfaceKey) {
+                const row = (snap.facets || []).find(
+                    (x) => x.id === surfaceKey,
+                );
+                return row ? row.title : surfaceKey;
+            }
+
+            function facetCard(snap, f) {
+                const proto = f.protocolPath || f.id;
+                const issueLine = facetIssueTagsHtml(snap, f.id);
+                return `<article class="facet" data-fid="${esc(f.id)}">
+          <div class="led ${esc(f.status)}" title="${esc(f.status)}"></div>
+          <div>
+            <p class="title">${esc(f.title)}</p>
+            <p class="protocol">${esc(proto)}</p>
+            <p class="api">${esc(f.apiCall)}</p>
+            <p class="desc">${esc(f.description)}</p>
+            <p class="counts"><strong>ok ${f.ok}</strong> · fail ${f.fail}</p>
+            ${issueLine}
+          </div>
+        </article>`;
+            }
+
+            function renderFacets(snap) {
+                const by = (g) => snap.facets.filter((f) => f.group === g);
+                els.gridBootstrap.innerHTML =
+                    by("bootstrap")
+                        .map((f) => facetCard(snap, f))
+                        .join("") || "<p style='color:var(--muted)'>—</p>";
+                els.gridWorld.innerHTML =
+                    by("world")
+                        .map((f) => facetCard(snap, f))
+                        .join("") || "<p style='color:var(--muted)'>—</p>";
+                els.gridLoad.innerHTML =
+                    by("load")
+                        .map((f) => facetCard(snap, f))
+                        .join("") || "<p style='color:var(--muted)'>—</p>";
+            }
+
+            function fmtTime(ts) {
+                try {
+                    return new Date(ts).toLocaleTimeString();
+                } catch {
+                    return "";
+                }
+            }
+
+            function renderGroups(snap) {
+                const groups = snap.failureGroups || [];
+                if (!groups.length) {
+                    els.groupList.innerHTML = `<div style="padding:20px;color:var(--muted)">No groups yet.</div>`;
+                    els.groupListFoot.hidden = true;
+                    return;
+                }
+                const cap = DASH_GROUP_MAX_ROWS;
+                const slice = groups.slice(0, cap);
+                els.groupList.innerHTML = slice
+                    .map(
+                        (
+                            g,
+                        ) => `<div class="fail-row" style="cursor:pointer" data-ck="${esc(g.correlationKey)}" title="Open issue">
+            <div>
+              <span class="tag" style="background:rgba(94,234,212,0.12);color:var(--accent)">${esc(g.correlationKey)}</span>
+              <div class="msg" style="color:var(--muted);font-size:0.72rem;margin-top:4px">Surfaces: ${esc((g.surfaceKeys || []).join(" · ") || "—")}</div>
+              <div class="msg" style="color:var(--muted);font-size:0.8rem;margin-top:6px">${esc(g.sampleMessage.slice(0, 200))}${g.sampleMessage.length > 200 ? "…" : ""}</div>
+            </div>
+            <div class="surf" title="libvex Client path">${esc((g.protocolPaths || []).join(" · ") || "—")}</div>
+            <div class="meta">count <strong style="color:var(--text)">${g.count}</strong></div>
+          </div>`,
+                    )
+                    .join("");
+                if (groups.length > cap) {
+                    els.groupListFoot.textContent = `${cap} of ${groups.length} groups`;
+                    els.groupListFoot.hidden = false;
+                } else {
+                    els.groupListFoot.hidden = true;
+                }
+                els.groupList.querySelectorAll(".fail-row").forEach((row) => {
+                    row.addEventListener("click", () => {
+                        const ck = row.getAttribute("data-ck");
+                        if (ck) {
+                            expandedCorrelation = ck;
+                            location.hash = `#/issue/${encodeURIComponent(ck)}`;
+                        }
+                    });
+                });
+            }
+
+            function renderFailures(snap) {
+                const list = snap.failures || [];
+                els.failCount.textContent = list.length
+                    ? `(${list.length} recorded)`
+                    : "(none yet)";
+                if (!list.length) {
+                    els.failList.innerHTML = `<div style="padding:28px;text-align:center;color:var(--muted)">No failures yet.</div>`;
+                    els.failListFoot.hidden = true;
+                    return;
+                }
+                const cap = DASH_FAIL_MAX_ROWS;
+                const slice = list.slice(0, cap);
+                els.failList.innerHTML = slice
+                    .map((f) => {
+                        const proto = f.protocolPath || f.libvexSurface || "—";
+                        const ck = f.correlationKey || "";
+                        return `<div class="fail-row" data-fid="${esc(f.id)}" data-ck="${esc(ck)}" title="Open issue">
+            <div>
+              <span class="tag" style="background:rgba(94,234,212,0.12);color:var(--accent);font-size:0.62rem">${esc(ck)}</span>
+              <div style="font-size:0.7rem;color:var(--muted);margin-top:3px"><code style="color:var(--accent2)">${esc(f.surfaceKey || f.facetId || "")}</code></div>
+              <div class="msg">${esc(f.message)}</div>
+            </div>
+            <div class="surf" title="libvex Client path">${esc(proto)}</div>
+            <div class="meta">burst ${f.burst} · ${esc(f.phase)}${f.clientIndex != null ? " · c" + f.clientIndex : ""}<br/>${fmtTime(f.at)}</div>
+          </div>`;
+                    })
+                    .join("");
+                if (list.length > cap) {
+                    els.failListFoot.textContent = `${cap} of ${list.length} samples`;
+                    els.failListFoot.hidden = false;
+                } else {
+                    els.failListFoot.hidden = true;
+                }
+                els.failList.querySelectorAll(".fail-row").forEach((row) => {
+                    row.addEventListener("click", () => {
+                        const ck = row.getAttribute("data-ck");
+                        if (ck) {
+                            expandedCorrelation = ck;
+                            location.hash = `#/issue/${encodeURIComponent(ck)}`;
+                        } else {
+                            location.hash = "#/issues";
+                        }
+                    });
+                });
+            }
+
+            function scheduleDashboardAuxPaint(snap) {
+                dashAuxPendingSnap = snap;
+                const now = Date.now();
+                const run = () => {
+                    dashAuxTimer = null;
+                    const s = dashAuxPendingSnap;
+                    dashAuxPendingSnap = null;
+                    dashAuxLastPaint = Date.now();
+                    if (s) {
+                        renderGroups(s);
+                        renderFailures(s);
+                    }
+                };
+                if (
+                    dashAuxLastPaint === 0 ||
+                    now - dashAuxLastPaint >= DASH_AUX_PAINT_MS
+                ) {
+                    if (dashAuxTimer !== null) {
+                        clearTimeout(dashAuxTimer);
+                        dashAuxTimer = null;
+                    }
+                    run();
+                    return;
+                }
+                if (dashAuxTimer !== null) {
+                    clearTimeout(dashAuxTimer);
+                }
+                dashAuxTimer = setTimeout(
+                    run,
+                    DASH_AUX_PAINT_MS - (now - dashAuxLastPaint),
+                );
+            }
+
+            function renderStats(snap) {
+                const wallLabel = snap.forever
+                    ? String(snap.currentBurst)
+                    : `${snap.currentBurst} / ${snap.plannedRounds}`;
+                const pacing =
+                    snap.loadPacing === "paced" ? "paced" : "immediate";
+                const gap =
+                    snap.loadPacing === "paced" && snap.burstGapMs > 0
+                        ? `${snap.burstGapMs} ms`
+                        : "—";
+                const burstSlots =
+                    snap.lastBurstOfferedSlotsPerSec != null
+                        ? `~${snap.lastBurstOfferedSlotsPerSec}/s (wall)`
+                        : "—";
+                const parts = [
+                    ["Scenario", snap.scenario],
+                    ["Target", snap.host],
+                    ["Phase", snap.phase],
+                    ["Wall #", wallLabel],
+                    ["Wall pacing", pacing],
+                    ["Paced gap", gap],
+                    ["Concurrency", String(snap.concurrency)],
+                    ["Clients", String(snap.clientCount)],
+                    ["Last wall slots/s", burstSlots],
+                    ["Ops counted", String(snap.completedOps)],
+                    [
+                        "Last wall",
+                        snap.lastBurstMs != null
+                            ? `${snap.lastBurstMs} ms`
+                            : "—",
+                    ],
+                ];
+                els.stats.innerHTML = parts
+                    .map(
+                        ([k, v]) =>
+                            `<div class="stat"><div class="k">${esc(k)}</div><div class="v">${esc(String(v))}</div></div>`,
+                    )
+                    .join("");
+            }
+
+            function scheduleIssuesViewPaint(snap) {
+                const route = parseHashRoute();
+                if (route.name !== "issues") {
+                    return;
+                }
+                const gap = route.issueKey ? 3200 : 2200;
+                const run = () => {
+                    issuesUiTimer = null;
+                    issuesUiLastPaint = Date.now();
+                    renderIssuesShell(snap);
+                };
+                const now = Date.now();
+                if (issuesUiLastPaint === 0 || now - issuesUiLastPaint >= gap) {
+                    run();
+                    return;
+                }
+                if (issuesUiTimer !== null) {
+                    clearTimeout(issuesUiTimer);
+                }
+                issuesUiTimer = setTimeout(
+                    run,
+                    gap - (now - issuesUiLastPaint),
+                );
+            }
+
+            let wasRestartPending = false;
+
+            function syncRestartBurstGapFieldVisibility() {
+                if (!els.restartLoadPacing || !els.restartBurstGapWrap) {
+                    return;
+                }
+                const mode = els.restartLoadPacing.value;
+                els.restartBurstGapWrap.style.opacity =
+                    mode === "paced" ? "1" : "0.45";
+                if (els.restartBurstGap) {
+                    els.restartBurstGap.disabled = mode !== "paced";
+                }
+            }
+
+            function seedRestartFormOnce(snap) {
+                if (restartFormSeeded || !els.restartClients) {
+                    return;
+                }
+                restartFormSeeded = true;
+                els.restartClients.value = String(snap.clientCount ?? 10);
+                els.restartConcurrency.value = String(snap.concurrency ?? 25);
+                els.restartLoadPacing.value =
+                    snap.loadPacing === "paced" ? "paced" : "immediate";
+                const gap =
+                    snap.loadPacing === "paced" &&
+                    typeof snap.burstGapMs === "number"
+                        ? snap.burstGapMs
+                        : 750;
+                els.restartBurstGap.value = String(gap);
+                syncRestartBurstGapFieldVisibility();
+            }
+
+            function updateRestartStatusLine(snap) {
+                if (!els.restartStatus) {
+                    return;
+                }
+                if (snap.restartPending) {
+                    wasRestartPending = true;
+                    els.restartStatus.hidden = false;
+                    els.restartStatus.classList.remove("err");
+                    els.restartStatus.textContent =
+                        "Restart queued — applies when the current burst wall finishes.";
+                    return;
+                }
+                if (wasRestartPending) {
+                    wasRestartPending = false;
+                    restartFormSeeded = false;
+                    seedRestartFormOnce(snap);
+                    els.restartStatus.hidden = true;
+                    els.restartStatus.textContent = "";
+                    els.restartStatus.classList.remove("err");
+                }
+            }
+
+            function applySnap(snap) {
+                lastSnap = snap;
+                seedRestartFormOnce(snap);
+                updateRestartStatusLine(snap);
+                renderStats(snap);
+                renderFacets(snap);
+                scheduleDashboardAuxPaint(snap);
+                paintRunMeter(snap);
+                syncLivePills();
+                if (parseHashRoute().name === "issues") {
+                    scheduleIssuesViewPaint(snap);
+                }
+            }
+
+            function paintRunMeter(snap) {
+                const on = els.livePill.classList.contains("on");
+                const n =
+                    typeof snap.opsPerSecond1s === "number"
+                        ? snap.opsPerSecond1s
+                        : 0;
+                const max =
+                    Number(els.rpmGauge?.dataset.gaugeMax || "1000") || 1000;
+                const bar = document.getElementById("rpmSegBar");
+                const segCount = Number(
+                    els.rpmGauge?.dataset.rpmSegCount || "0",
+                );
+                if (bar && segCount > 0) {
+                    const pct = on ? Math.min(1, n / max) : 0;
+                    const active = Math.round(pct * segCount);
+                    const segs = bar.querySelectorAll(".rpm-seg");
+                    segs.forEach((el, i) => {
+                        el.classList.toggle("rpm-seg--lit", i < active);
+                    });
+                }
+                if (els.meterTouchPerSec) {
+                    els.meterTouchPerSec.textContent = on ? String(n) : "—";
+                }
+                if (on) {
+                    els.liveText.textContent = "Live";
+                }
+            }
+
+            function syncLivePills() {
+                const on = els.livePill.classList.contains("on");
+                const text = els.liveText.textContent;
+                els.livePillIssues.classList.toggle("on", on);
+                els.liveTextIssues.textContent = text;
+            }
+
+            function parseHashRoute() {
+                const raw = (location.hash || "").replace(/^#/, "").trim();
+                if (raw === "" || raw === "/" || raw === "/dashboard") {
+                    return { issueKey: null, name: "dashboard" };
+                }
+                if (raw === "/issues" || raw === "/errors") {
+                    return { issueKey: null, name: "issues" };
+                }
+                if (raw.startsWith("/issue/")) {
+                    const rest = raw.slice(7);
+                    try {
+                        return {
+                            issueKey: decodeURIComponent(rest),
+                            name: "issues",
+                        };
+                    } catch {
+                        return { issueKey: rest, name: "issues" };
+                    }
+                }
+                if (raw.startsWith("/issues/") || raw.startsWith("/errors/")) {
+                    const rest = raw.startsWith("/issues/")
+                        ? raw.slice("/issues/".length)
+                        : raw.slice("/errors/".length);
+                    try {
+                        return {
+                            issueKey: decodeURIComponent(rest),
+                            name: "issues",
+                        };
+                    } catch {
+                        return { issueKey: rest, name: "issues" };
+                    }
+                }
+                return { issueKey: null, name: "dashboard" };
+            }
+
+            function setActiveView(which) {
+                const map = {
+                    dashboard: els.viewDashboard,
+                    issues: els.viewIssues,
+                };
+                for (const [name, el] of Object.entries(map)) {
+                    const on = name === which;
+                    el.classList.toggle("hidden", !on);
+                    el.setAttribute("aria-hidden", on ? "false" : "true");
+                }
+            }
+
+            function applyRoute() {
+                const raw = (location.hash || "").replace(/^#/, "").trim();
+                if (raw === "/facet" || raw.startsWith("/facet/")) {
+                    history.replaceState(
+                        null,
+                        "",
+                        `${location.pathname}${location.search}#/`,
+                    );
+                }
+                const r = parseHashRoute();
+                if (r.name === "issues") {
+                    setActiveView("issues");
+                    expandedCorrelation = r.issueKey || null;
+                    issuesUiLastPaint = 0;
+                    if (issuesUiTimer !== null) {
+                        clearTimeout(issuesUiTimer);
+                        issuesUiTimer = null;
+                    }
+                    if (lastSnap) {
+                        renderIssuesShell(lastSnap);
+                    } else {
+                        renderIssuesLabEmpty();
+                    }
+                } else {
+                    setActiveView("dashboard");
+                    dashAuxLastPaint = 0;
+                    if (dashAuxTimer !== null) {
+                        clearTimeout(dashAuxTimer);
+                        dashAuxTimer = null;
+                    }
+                    if (lastSnap) {
+                        scheduleDashboardAuxPaint(lastSnap);
+                    }
+                }
+            }
+
+            function renderIssuesLabEmpty() {
+                els.issuesSheetBody.innerHTML = `<tr><td colspan="4" style="padding:28px;text-align:center;color:var(--muted)">Connect to the stress run (SSE). The issue list appears on the first snapshot.</td></tr>`;
+                els.issuesListShell.classList.remove("hidden");
+                els.issuesDetailShell.classList.add("hidden");
+            }
+
+            function failuresByCorrelation(failures) {
+                const m = new Map();
+                for (const f of failures) {
+                    const ck = f.correlationKey || "";
+                    if (!ck) {
+                        continue;
+                    }
+                    let arr = m.get(ck);
+                    if (arr === undefined) {
+                        arr = [];
+                        m.set(ck, arr);
+                    }
+                    arr.push(f);
+                }
+                return m;
+            }
+
+            function aggregateParamsForGroup(rows) {
+                const keyToValCounts = new Map();
+                for (const f of rows) {
+                    const inp = f.requestInputs;
+                    if (!inp || typeof inp !== "object") {
+                        continue;
+                    }
+                    for (const [k, v] of Object.entries(inp)) {
+                        let inner = keyToValCounts.get(k);
+                        if (inner === undefined) {
+                            inner = new Map();
+                            keyToValCounts.set(k, inner);
+                        }
+                        const vs =
+                            typeof v === "object" && v !== null
+                                ? JSON.stringify(v)
+                                : String(v);
+                        inner.set(vs, (inner.get(vs) || 0) + 1);
+                    }
+                }
+                const out = [];
+                for (const [key, valMap] of keyToValCounts) {
+                    const top = [...valMap.entries()]
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 4);
+                    if (top.length > 0) {
+                        out.push({ key, top });
+                    }
+                }
+                out.sort((a, b) => (b.top[0]?.[1] || 0) - (a.top[0]?.[1] || 0));
+                return out.slice(0, 10);
+            }
+
+            function renderParamHeat(agg, rowMax) {
+                if (!agg.length) {
+                    return `<span style="color:var(--muted);font-size:0.72rem">—</span>`;
+                }
+                const maxC = Math.max(
+                    rowMax,
+                    1,
+                    ...agg.flatMap((a) => a.top.map((t) => t[1])),
+                );
+                return agg
+                    .map(({ key, top }) => {
+                        const bits = top
+                            .map(([val, cnt]) => {
+                                const pct = Math.round((cnt / maxC) * 100);
+                                const short =
+                                    val.length > 40
+                                        ? `${val.slice(0, 37)}…`
+                                        : val;
+                                return `<div class="param-val-row"><span class="v" title="${esc(val)}">${esc(short)}</span><span>${cnt}</span></div><div class="param-mini"><i style="width:${pct}%"></i></div>`;
+                            })
+                            .join("");
+                        return `<div class="param-heat"><div class="param-key">${esc(key)}</div>${bits}</div>`;
+                    })
+                    .join("");
+            }
+
+            function buildIssueRows(snap) {
+                const failures = snap.failures || [];
+                const byCk = failuresByCorrelation(failures);
+                const groups = snap.failureGroups || [];
+                const merged = [];
+                if (groups.length > 0) {
+                    for (const g of groups) {
+                        const ck = g.correlationKey;
+                        const rows = byCk.get(ck) || [];
+                        merged.push({
+                            agg: aggregateParamsForGroup(rows),
+                            correlationKey: ck,
+                            count: g.count,
+                            protocolPaths: g.protocolPaths || [],
+                            rows,
+                            sampleMessage: g.sampleMessage || "",
+                            surfaceKeys: g.surfaceKeys || [],
+                        });
+                    }
+                    merged.sort((a, b) => b.count - a.count);
+                } else {
+                    for (const [ck, rows] of byCk) {
+                        merged.push({
+                            agg: aggregateParamsForGroup(rows),
+                            correlationKey: ck,
+                            count: rows.length,
+                            protocolPaths: [
+                                ...new Set(
+                                    rows
+                                        .map((r) => r.protocolPath)
+                                        .filter(Boolean),
+                                ),
+                            ],
+                            rows,
+                            sampleMessage: rows[0]?.message || "",
+                            surfaceKeys: [
+                                ...new Set(
+                                    rows
+                                        .map((r) => r.surfaceKey || r.facetId)
+                                        .filter(Boolean),
+                                ),
+                            ],
+                        });
+                    }
+                    merged.sort((a, b) => b.count - a.count);
+                }
+                return merged;
+            }
+
+            function shortCorrelationKey(ck) {
+                if (!ck || typeof ck !== "string") {
+                    return "—";
+                }
+                return ck.length <= 14 ? ck : `…${ck.slice(-12)}`;
+            }
+
+            function humanHeuristicIssueTitle(r) {
+                let m = String(r.sampleMessage || "")
+                    .replace(/^Error:\s*/i, "")
+                    .trim();
+                if (m.length > 88) {
+                    m = `${m.slice(0, 85)}…`;
+                }
+                if (m.length > 0) {
+                    return m;
+                }
+                const p = (r.protocolPaths || [])[0] || "";
+                return firstProtocolCall(p) || "Stress incident";
+            }
+
+            function issueListTitle(_snap, r) {
+                return humanHeuristicIssueTitle(r);
+            }
+
+            function groupToIssueRowShape(g) {
+                return {
+                    agg: [],
+                    correlationKey: g.correlationKey,
+                    count: g.count,
+                    protocolPaths: g.protocolPaths || [],
+                    rows: [],
+                    sampleMessage: g.sampleMessage || "",
+                    surfaceKeys: g.surfaceKeys || [],
+                };
+            }
+
+            function facetIssueTagsHtml(snap, facetId) {
+                const groups = snap.failureGroups || [];
+                const hits = groups.filter((g) =>
+                    (g.surfaceKeys || []).includes(facetId),
+                );
+                if (!hits.length) {
+                    return "";
+                }
+                const shown = hits.slice(0, 3);
+                const bits = shown.map((g) => {
+                    const pseudo = groupToIssueRowShape(g);
+                    const t = issueListTitle(snap, pseudo);
+                    const href = `#/issue/${encodeURIComponent(g.correlationKey)}`;
+                    return `<a class="facet-issue-tag" href="${href}">${esc(t)}</a>`;
+                });
+                const seps = bits.join(
+                    '<span class="facet-issue-sep" aria-hidden="true">·</span>',
+                );
+                const more =
+                    hits.length > 3
+                        ? `<span class="facet-issue-more">+${String(hits.length - 3)}</span>`
+                        : "";
+                return `<p class="facet-issue-line">${seps}${more ? " " + more : ""}</p>`;
+            }
+
+            function surfaceTitlesForIssue(snap, surfaceKeys) {
+                const keys = surfaceKeys || [];
+                if (!keys.length) {
+                    return "";
+                }
+                const labels = keys
+                    .slice(0, 6)
+                    .map((k) => facetTitleBySurfaceKey(snap, k));
+                const extra = keys.length > 6 ? ` +${keys.length - 6}` : "";
+                return `${labels.join(" · ")}${extra}`;
+            }
+
+            function renderIssuesShell(snap) {
+                const ik = parseHashRoute().issueKey;
+                if (ik) {
+                    els.issuesListShell.classList.add("hidden");
+                    els.issuesDetailShell.classList.remove("hidden");
+                    renderIssueDetail(snap, ik);
+                } else {
+                    els.issuesDetailShell.classList.add("hidden");
+                    els.issuesListShell.classList.remove("hidden");
+                    renderIssuesList(snap);
+                }
+            }
+
+            function firstProtocolCall(path) {
+                if (!path || typeof path !== "string") {
+                    return "";
+                }
+                const t = path.split(";")[0].trim();
+                return t || path.trim();
+            }
+
+            function harnessCallNotationJs(path, inputs) {
+                const head = firstProtocolCall(path);
+                if (!head) {
+                    return "(unknown Client API)";
+                }
+                let arg = "{}";
+                if (inputs && typeof inputs === "object") {
+                    try {
+                        arg = JSON.stringify(inputs, null, 2);
+                    } catch {
+                        arg = "{}";
+                    }
+                }
+                if (arg.length > 12000) {
+                    arg = `${arg.slice(0, 12000)}\n/* … */`;
+                }
+                return `${head}(\n${arg}\n)`;
+            }
+
+            function formatAxiosBlock(ax) {
+                if (!ax || typeof ax !== "object") {
+                    return "(No Axios metadata on this sample.)";
+                }
+                const bits = [];
+                if (ax.method != null) {
+                    bits.push(`method: ${ax.method}`);
+                }
+                if (ax.url != null) {
+                    bits.push(`url: ${ax.url}`);
+                }
+                if (ax.status != null) {
+                    bits.push(
+                        `status: ${ax.status} ${ax.statusText || ""}`.trim(),
+                    );
+                }
+                if (ax.message) {
+                    bits.push(`message: ${ax.message}`);
+                }
+                if (ax.dataSnippet) {
+                    bits.push(`response body (snippet):\n${ax.dataSnippet}`);
+                }
+                return bits.length ? bits.join("\n") : "(Axios object empty)";
+            }
+
+            function fenceMarkdown(lang, body) {
+                let b = String(body);
+                if (b.includes("```")) {
+                    b = b.replace(/```/g, "``\u200b`");
+                }
+                return "```" + lang + "\n" + b + "\n```";
+            }
+
+            function buildGithubIssueDraftMarkdown(ck, r, sample) {
+                const shareUrl = `${location.origin}${location.pathname}${location.search}#/issue/${encodeURIComponent(ck)}`;
+                const surf = (r.surfaceKeys || []).join(" · ") || "—";
+                const proto =
+                    (r.protocolPaths || []).join(" · ") ||
+                    sample.protocolPath ||
+                    "—";
+                const callPath =
+                    sample.protocolPath || firstProtocolCall(proto);
+                const callTxt = harnessCallNotationJs(
+                    callPath,
+                    sample.requestInputs,
+                );
+                const httpTxt = formatAxiosBlock(sample.axios);
+                const stackTxt =
+                    typeof sample.stack === "string" && sample.stack.length > 0
+                        ? sample.stack
+                        : "(No Error.stack captured.)";
+                const msgOne = (r.sampleMessage || "")
+                    .replace(/\s+/g, " ")
+                    .trim();
+                const titleHint =
+                    msgOne.length > 100
+                        ? `${msgOne.slice(0, 97)}… · ${ck.slice(0, 10)}`
+                        : `${msgOne || "Stress failure"} · ${ck.slice(0, 10)}`;
+                return [
+                    `Suggested **title** (copy into GitHub): \`${titleHint}\``,
+                    "",
+                    "### Context",
+                    `- **Correlation key:** \`${ck}\``,
+                    `- **Stress dashboard:** ${shareUrl}`,
+                    `- **Count (this snapshot):** ${r.count}`,
+                    `- **Surfaces:** ${surf}`,
+                    `- **Protocol paths:** ${proto}`,
+                    "",
+                    "### Representative harness call",
+                    fenceMarkdown("js", callTxt),
+                    "",
+                    "### HTTP / transport (first sample)",
+                    fenceMarkdown("text", httpTxt),
+                    "",
+                    "### Client stack (first sample)",
+                    fenceMarkdown("text", stackTxt),
+                    "",
+                    "### Raw samples JSON",
+                    fenceMarkdown("json", JSON.stringify(r.rows, null, 2)),
+                ].join("\n");
+            }
+
+            function renderIssueDetail(snap, ck) {
+                const rows = buildIssueRows(snap);
+                const r = rows.find((x) => x.correlationKey === ck);
+                const shareUrl = `${location.pathname}${location.search}#/issue/${encodeURIComponent(ck)}`;
+                if (!r) {
+                    els.issueDetailMount.innerHTML = `<header class="issues-hero"><h1>Issue</h1><p style="color:var(--muted)">No data for <code>${esc(ck)}</code> in this snapshot yet.</p></header>`;
+                    return;
+                }
+                const sample = r.rows[0] || {};
+                const proto0 =
+                    (r.protocolPaths || []).join(" · ") ||
+                    sample.protocolPath ||
+                    "—";
+                const callPath =
+                    sample.protocolPath || firstProtocolCall(proto0);
+                const callTxt = harnessCallNotationJs(
+                    callPath,
+                    sample.requestInputs,
+                );
+                const httpTxt = formatAxiosBlock(sample.axios);
+                const stackTxt =
+                    typeof sample.stack === "string" && sample.stack.length > 0
+                        ? sample.stack
+                        : "(No Error.stack captured.)";
+                const displayTitle = issueListTitle(snap, r);
+                const paramBlock =
+                    r.agg && r.agg.length > 0
+                        ? `<div class="issue-detail-card"><h3>Common parameters</h3><p style="color:var(--muted);font-size:0.8rem;margin:0 0 10px">Sanitized fields.</p><div class="param-heat-wrap">${renderParamHeat(r.agg, r.count)}</div></div>`
+                        : "";
+                const rawJson = JSON.stringify(r.rows, null, 2);
+                const ghDraft = buildGithubIssueDraftMarkdown(ck, r, sample);
+                const relFn = surfaceTitlesForIssue(snap, r.surfaceKeys);
+                const relFnBlock =
+                    relFn.length > 0
+                        ? `<div class="issue-detail-card"><h3>Surfaces</h3><p style="margin:0;font-size:0.88rem;color:#c8cad6;line-height:1.5">${esc(relFn)}</p></div>`
+                        : "";
+                els.issueDetailMount.innerHTML = `
+          <p style="margin:0 0 16px;font-size:0.82rem">
+            <a href="#/issues" style="color:var(--accent);font-weight:600;text-decoration:none">← Issues</a>
+          </p>
+          <header class="issues-hero">
+            <h1 style="max-width:920px">${esc(displayTitle)}</h1>
+            <p class="issue-list-sub"><strong>${r.count}</strong> similar events · full id <code>${esc(ck)}</code></p>
+            <p style="font-size:0.8rem;color:var(--muted);word-break:break-all;margin-top:8px">Share: <code>${esc(shareUrl)}</code></p>
+            <p style="margin-top:12px;font-size:0.88rem;color:#c8cad6;line-height:1.45"><strong>What failed:</strong> ${esc(r.sampleMessage)}</p>
+            <p style="margin-top:6px;font-size:0.82rem;color:var(--muted)">Surface keys <code class="mono">${esc((r.surfaceKeys || []).join(" · ") || "—")}</code></p>
+          </header>
+          ${relFnBlock}
+          <div class="issue-detail-card"><h3>Harness call (JS-style)</h3><pre class="issue-pre">${esc(callTxt)}</pre></div>
+          <div class="issue-detail-card"><h3>HTTP / transport</h3><pre class="issue-pre">${esc(httpTxt)}</pre></div>
+          <div class="issue-detail-card"><h3>Client stack</h3><pre class="issue-pre">${esc(stackTxt)}</pre></div>
+          ${paramBlock}
+          <div class="issue-detail-card"><h3>Export</h3>
+            <p style="color:var(--muted);font-size:0.82rem;margin:0 0 10px">Markdown draft + JSON.</p>
+            <div class="sheet-actions" style="margin-bottom:8px">
+              <button type="button" class="btn-copy-gh-draft">Copy GitHub draft</button>
+              <button type="button" class="btn-copy-issue">Copy JSON</button>
+            </div>
+          </div>
+          <div class="issue-detail-card"><h3>Raw samples JSON</h3>
+            <pre class="issue-pre" style="max-height:400px">${esc(rawJson)}</pre>
+          </div>`;
+                const btnJson =
+                    els.issueDetailMount.querySelector(".btn-copy-issue");
+                if (btnJson) {
+                    btnJson.addEventListener("click", async () => {
+                        try {
+                            await navigator.clipboard.writeText(rawJson);
+                            btnJson.textContent = "Copied";
+                            setTimeout(() => {
+                                btnJson.textContent = "Copy JSON";
+                            }, 1400);
+                        } catch {
+                            btnJson.textContent = "Copy failed";
+                        }
+                    });
+                }
+                const btnGh =
+                    els.issueDetailMount.querySelector(".btn-copy-gh-draft");
+                if (btnGh) {
+                    btnGh.addEventListener("click", async () => {
+                        try {
+                            await navigator.clipboard.writeText(ghDraft);
+                            btnGh.textContent = "Copied";
+                            setTimeout(() => {
+                                btnGh.textContent = "Copy GitHub draft";
+                            }, 1400);
+                        } catch {
+                            btnGh.textContent = "Copy failed";
+                        }
+                    });
+                }
+            }
+
+            function renderIssuesList(snap) {
+                const rows = buildIssueRows(snap);
+                if (!rows.length) {
+                    els.issuesSheetBody.innerHTML = `<tr><td colspan="4" style="padding:28px;text-align:center;color:var(--muted)">No failures in this snapshot.</td></tr>`;
+                    return;
+                }
+                const bodyParts = [];
+                for (const r of rows) {
+                    const protoOne =
+                        firstProtocolCall((r.protocolPaths || [])[0] || "") ||
+                        "—";
+                    const listTitle = issueListTitle(snap, r);
+                    const ckShort = shortCorrelationKey(r.correlationKey);
+                    const ih = `#/issue/${encodeURIComponent(r.correlationKey)}`;
+                    const fnLine = surfaceTitlesForIssue(snap, r.surfaceKeys);
+                    const fnHtml = fnLine
+                        ? `<div class="issue-list-sub" style="margin-top:4px"><span style="color:var(--muted)">Functions:</span> ${esc(fnLine)}</div>`
+                        : "";
+                    bodyParts.push(`<tr class="sheet-row" data-ck="${esc(r.correlationKey)}">
+          <td class="td-occ"><span class="occ-badge" title="${r.count} occurrences in this run window">${r.count}</span></td>
+          <td>
+            <div class="issue-list-title">${esc(listTitle)}</div>
+            <div class="issue-list-sub">Id <code title="${esc(r.correlationKey)}">${esc(ckShort)}</code> · open for raw data</div>
+            ${fnHtml}
+          </td>
+          <td class="issue-api-short" title="${esc(protoOne)}">${esc(protoOne)}</td>
+          <td class="cell-actions"><a href="${ih}">Details</a></td>
+        </tr>`);
+                }
+                els.issuesSheetBody.innerHTML = bodyParts.join("");
+            }
+
+            els.issuesSheetBody.addEventListener("click", (ev) => {
+                if (ev.target.closest("a")) {
+                    return;
+                }
+                const tr = ev.target.closest("tr.sheet-row");
+                if (!tr || !tr.dataset.ck) {
+                    return;
+                }
+                location.hash = `#/issue/${encodeURIComponent(tr.dataset.ck)}`;
+            });
+
+            window.addEventListener("hashchange", () => {
+                applyRoute();
+            });
+
+            if (els.restartLoadPacing) {
+                els.restartLoadPacing.addEventListener(
+                    "change",
+                    syncRestartBurstGapFieldVisibility,
+                );
+            }
+            if (els.restartForm) {
+                els.restartForm.addEventListener("submit", async (ev) => {
+                    ev.preventDefault();
+                    if (!els.restartSubmit) {
+                        return;
+                    }
+                    els.restartSubmit.disabled = true;
+                    try {
+                        const body = {
+                            burstGapMs: Number(els.restartBurstGap.value),
+                            clientCount: Number(els.restartClients.value),
+                            concurrency: Number(els.restartConcurrency.value),
+                            loadPacing: els.restartLoadPacing.value,
+                        };
+                        const resp = await fetch("/api/restart-run", {
+                            body: JSON.stringify(body),
+                            headers: { "Content-Type": "application/json" },
+                            method: "POST",
+                        });
+                        let data = {};
+                        try {
+                            data = await resp.json();
+                        } catch {
+                            data = {};
+                        }
+                        if (!resp.ok) {
+                            els.restartStatus.hidden = false;
+                            els.restartStatus.classList.add("err");
+                            els.restartStatus.textContent =
+                                (data && data.error) ||
+                                `Request failed (${String(resp.status)})`;
+                            return;
+                        }
+                        els.restartStatus.classList.remove("err");
+                    } catch {
+                        els.restartStatus.hidden = false;
+                        els.restartStatus.classList.add("err");
+                        els.restartStatus.textContent = "Network error";
+                    } finally {
+                        els.restartSubmit.disabled = false;
+                    }
+                });
+            }
+
+            const es = new EventSource("/api/stream");
+            es.onopen = () => {
+                els.livePill.classList.add("on");
+                els.liveText.textContent = "Live";
+                if (els.meterTouchPerSec) {
+                    els.meterTouchPerSec.textContent = "…";
+                }
+                clearRpmSegments();
+                syncLivePills();
+                if (lastSnap) {
+                    paintRunMeter(lastSnap);
+                }
+            };
+            es.onerror = () => {
+                els.livePill.classList.remove("on");
+                els.liveText.textContent = "Reconnecting…";
+                if (els.meterTouchPerSec) {
+                    els.meterTouchPerSec.textContent = "—";
+                }
+                clearRpmSegments();
+                syncLivePills();
+            };
+            es.onmessage = (ev) => {
+                try {
+                    applySnap(JSON.parse(ev.data));
+                } catch {
+                    /* ignore */
+                }
+            };
+
+            applyRoute();
+        </script>
+    </body>
+</html>

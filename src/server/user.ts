@@ -31,9 +31,13 @@ export const getUserRouter = (
     });
 
     router.get("/:id/devices", protect, async (req, res) => {
-        const deviceList = await db.retrieveUserDeviceList([
-            getParam(req, "id"),
-        ]);
+        const id = getParam(req, "id");
+        const user = await db.retrieveUser(id);
+        if (!user) {
+            res.sendStatus(404);
+            return;
+        }
+        const deviceList = await db.retrieveUserDeviceList([id]);
         return res.send(msgpack.encode(deviceList));
     });
 
