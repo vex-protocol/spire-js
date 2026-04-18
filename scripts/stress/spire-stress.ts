@@ -37,6 +37,7 @@
  *
  * Time cap (stress:cli matrix / unattended soak): SPIRE_STRESS_MAX_WALL_SEC=N stops the flood loop after N seconds
  * of wall time (flood walls + any paced idle gaps). Works with SPIRE_STRESS_FOREVER=1. See npm run stress:cli.
+ * Client teardown: SPIRE_STRESS_CLIENT_CLOSE_MS caps how long `Client.close()` may run (default 120000); harness then calls process.exit.
  *
  * Web dashboard: POST /api/restart-run queues a full session restart (clients + load mode + concurrency)
  * after the current flood wall (see Session controls in scripts/stress/web/index.html).
@@ -52,6 +53,8 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { mkdirSync } from "node:fs";
+import http from "node:http";
+import https from "node:https";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import readline from "node:readline";
@@ -112,10 +115,61 @@ import { startStressWebServer } from "./stress-web-server.ts";
 /** libvex / `ws` attach many `"message"` handlers; default (10) spams MaxListenersExceededWarning. */
 EventEmitter.defaultMaxListeners = 100;
 
+/**
+ * Hard exit after `main()` so the harness always quits even when stray libuv handles
+ * remain (idle HTTP keep-alive, native sockets, etc.). Does not run if `main()` never settles.
+ */
+function exitStressHarness(): void {
+    try {
+        http.globalAgent.destroy();
+        https.globalAgent.destroy();
+    } catch {
+        /* ignore */
+    }
+    const code = typeof process.exitCode === "number" ? process.exitCode : 0;
+    process.exit(code);
+}
+
 function sleepMs(ms: number): Promise<void> {
     return new Promise((resolve) => {
         setTimeout(resolve, ms);
     });
+}
+
+/** Upper bound on `Client.close()` so a wedged libvex client cannot hang the harness forever. */
+function clientCloseBudgetMs(): number {
+    const raw = process.env["SPIRE_STRESS_CLIENT_CLOSE_MS"]?.trim();
+    if (raw === undefined || raw === "") {
+        return 120_000;
+    }
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 120_000;
+}
+
+async function closeAllStressClients(
+    clients: readonly Client[],
+): Promise<void> {
+    const budget = clientCloseBudgetMs();
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+            reject(
+                new Error(
+                    `stress: client.close() exceeded ${String(budget)}ms (set SPIRE_STRESS_CLIENT_CLOSE_MS or check libvex/spire)`,
+                ),
+            );
+        }, budget);
+    });
+    try {
+        await Promise.race([
+            Promise.all(clients.map((c) => c.close())),
+            timeoutPromise,
+        ]);
+    } finally {
+        if (timeoutId !== undefined) {
+            clearTimeout(timeoutId);
+        }
+    }
 }
 
 /** One stderr line per wall when `SPIRE_STRESS_WEB=0` — mirrors the web stats strip (dashboard). */
@@ -1046,7 +1100,7 @@ async function main(): Promise<void> {
                         break floodForever;
                     }
                     if (applyQueuedRestart()) {
-                        await Promise.all(clients.map((c) => c.close()));
+                        await closeAllStressClients(clients);
                         sessionRestart = true;
                         if (!stressQuietCli) {
                             process.stderr.write(
@@ -1160,7 +1214,7 @@ async function main(): Promise<void> {
                         break floodFinite;
                     }
                     if (applyQueuedRestart()) {
-                        await Promise.all(clients.map((c) => c.close()));
+                        await closeAllStressClients(clients);
                         sessionRestart = true;
                         if (!stressQuietCli) {
                             process.stderr.write(
@@ -1181,7 +1235,7 @@ async function main(): Promise<void> {
             }
 
             if (!sessionRestart) {
-                await Promise.all(clients.map((c) => c.close()));
+                await closeAllStressClients(clients);
             }
 
             lastHttpStats = httpStats;
@@ -1310,8 +1364,12 @@ async function main(): Promise<void> {
     }
 }
 
-void main().catch((err: unknown) => {
-    const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(msg + "\n");
-    process.exit(1);
-});
+void main()
+    .then(() => {
+        exitStressHarness();
+    })
+    .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        process.stderr.write(msg + "\n");
+        process.exit(1);
+    });
