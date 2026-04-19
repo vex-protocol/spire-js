@@ -17,9 +17,12 @@ See [**LICENSING.md**](./LICENSING.md) for the default **AGPL-3.0-or-later** ter
 
 ## Copyright headers
 
-New source files under `src/`, `scripts/`, and `services/` should include the standard header (see any existing `.ts` / `.js` file). From the **vex-protocol** workspace root, you can (re)apply headers with:
+New source files under `src/`, `scripts/`, and `services/` should include the standard header (see any existing `.ts` / `.js` file).
 
-`node scripts/add-copyright-headers.mjs spire-js`
+- **Check (also runs in CI):** `npm run copyright:check`
+- **Apply missing headers:** `npm run copyright:apply`
+
+From the **vex-protocol** monorepo root, run all three repos with: `node scripts/add-copyright-headers.mjs` (add) or `node scripts/add-copyright-headers.mjs --check`.
 
 ## Development
 
