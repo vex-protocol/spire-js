@@ -124,17 +124,17 @@ jobs:
                     -e "DEV_API_KEY=${DEV_API_KEY}" \
                     "${{ env.SPIRE_IMAGE_TAG }}"
 
-            - name: Wait for /status
+            - name: Wait for /healthz
               run: |
                   set -euo pipefail
                   for _ in $(seq 1 90); do
-                    if curl -sf --connect-timeout 2 "http://127.0.0.1:16777/status" >/dev/null; then
+                    if curl -sf --connect-timeout 2 "http://127.0.0.1:16777/healthz" >/dev/null; then
                       echo "Spire is up."
                       exit 0
                     fi
                     sleep 1
                   done
-                  echo "Timed out waiting for Spire /status"
+                  echo "Timed out waiting for Spire /healthz"
                   exit 1
 
             # Informational only: does not fail the job (see continue-on-error). Default conc=25 in stress-cli-sweep.

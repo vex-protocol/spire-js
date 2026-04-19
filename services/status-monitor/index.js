@@ -5,9 +5,35 @@
  */
 
 import Database from "better-sqlite3";
+import { timingSafeEqual } from "node:crypto";
 import fs from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
+
+const DEV_API_KEY_HEADER = "x-dev-api-key";
+
+/**
+ * Same contract as Spire `devApiKeySkipsRateLimits`: when `DEV_API_KEY` is set,
+ * the header must match (constant-time). When unset, returns true (local dev).
+ */
+function devApiKeyAuthorized(req, configuredKey) {
+    const configured = configuredKey?.trim() ?? "";
+    if (configured.length === 0) {
+        return true;
+    }
+    const presented = req.headers[DEV_API_KEY_HEADER];
+    if (!presented || presented.length !== configured.length) {
+        return false;
+    }
+    try {
+        return timingSafeEqual(
+            Buffer.from(presented, "utf8"),
+            Buffer.from(configured, "utf8"),
+        );
+    } catch {
+        return false;
+    }
+}
 
 const DEFAULT_URL = "https://api.vex.wtf/status";
 const DEFAULT_INTERVAL_MS = 60_000;
@@ -104,15 +130,20 @@ function initializeDatabase(dbPath) {
     return db;
 }
 
-async function collectOnce(targetUrl) {
+async function collectOnce(targetUrl, devApiKey) {
     const started = Date.now();
     const sampledAt = new Date().toISOString();
 
     try {
+        const headers = {
+            Accept: "application/json",
+        };
+        const key = devApiKey?.trim() ?? "";
+        if (key.length > 0) {
+            headers[DEV_API_KEY_HEADER] = key;
+        }
         const response = await fetch(targetUrl, {
-            headers: {
-                Accept: "application/json",
-            },
+            headers,
         });
 
         const requestLatencyMs = Date.now() - started;
@@ -468,20 +499,20 @@ function sendJson(res, statusCode, payload) {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader(
         "Access-Control-Allow-Headers",
-        "Content-Type, Authorization",
+        `Content-Type, Authorization, ${DEV_API_KEY_HEADER}`,
     );
     res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
     res.end(JSON.stringify(payload));
 }
 
-function startApiServer(db, host, port) {
+function startApiServer(db, host, port, devApiKeyConfigured) {
     const server = createServer((req, res) => {
         try {
             // Apply CORS headers for every response path, including errors.
             res.setHeader("Access-Control-Allow-Origin", "*");
             res.setHeader(
                 "Access-Control-Allow-Headers",
-                "Content-Type, Authorization",
+                `Content-Type, Authorization, ${DEV_API_KEY_HEADER}`,
             );
             res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
 
@@ -505,6 +536,10 @@ function startApiServer(db, host, port) {
             }
 
             if (url.pathname === "/latest" || url.pathname === "/api/latest") {
+                if (!devApiKeyAuthorized(req, devApiKeyConfigured)) {
+                    sendJson(res, 404, { error: "Not found." });
+                    return;
+                }
                 sendJson(res, 200, { data: getLatestSample(db) });
                 return;
             }
@@ -513,6 +548,10 @@ function startApiServer(db, host, port) {
                 url.pathname === "/summary" ||
                 url.pathname === "/api/summary"
             ) {
+                if (!devApiKeyAuthorized(req, devApiKeyConfigured)) {
+                    sendJson(res, 404, { error: "Not found." });
+                    return;
+                }
                 const hours = Number(url.searchParams.get("hours") || "24");
                 if (!Number.isFinite(hours) || hours <= 0) {
                     sendJson(res, 400, { error: "hours must be > 0" });
@@ -526,6 +565,10 @@ function startApiServer(db, host, port) {
                 url.pathname === "/timeseries" ||
                 url.pathname === "/api/timeseries"
             ) {
+                if (!devApiKeyAuthorized(req, devApiKeyConfigured)) {
+                    sendJson(res, 404, { error: "Not found." });
+                    return;
+                }
                 const windowHours = Number(
                     url.searchParams.get("windowHours") ||
                         url.searchParams.get("hours") ||
@@ -571,8 +614,14 @@ function startApiServer(db, host, port) {
 
 async function main() {
     const config = parseArgs(process.argv.slice(2));
+    const devApiKeyForSpire = process.env.DEV_API_KEY?.trim() ?? "";
     const db = initializeDatabase(config.dbPath);
-    const apiServer = startApiServer(db, config.apiHost, config.apiPort);
+    const apiServer = startApiServer(
+        db,
+        config.apiHost,
+        config.apiPort,
+        devApiKeyForSpire,
+    );
 
     console.log(`Monitoring ${config.url}`);
     console.log(`Interval: ${config.intervalMs}ms`);
@@ -608,7 +657,7 @@ async function main() {
 
     try {
         while (!shutdownRequested) {
-            const sample = await collectOnce(config.url);
+            const sample = await collectOnce(config.url, devApiKeyForSpire);
             insertSample(db, sample);
             console.log(formatLog(sample));
 

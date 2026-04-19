@@ -21,7 +21,7 @@ services:
         logging:
             driver: none
         healthcheck:
-            test: ["CMD", "wget", "-qO-", "http://localhost:16777/status"]
+            test: ["CMD", "wget", "-qO-", "http://localhost:16777/healthz"]
             interval: 30s
             timeout: 5s
             start_period: 10s

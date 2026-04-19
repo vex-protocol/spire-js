@@ -17,6 +17,8 @@ import { monitorEventLoopDelay, performance } from "node:perf_hooks";
 import axios from "axios";
 import Database from "better-sqlite3";
 
+import { DEV_API_KEY_HEADER } from "../../src/server/rateLimit.ts";
+
 import {
     formatHttpExpectLine,
     type HttpExpectStats,
@@ -65,6 +67,7 @@ function readStatusPayload(raw: unknown): {
     }
     const chk = raw["checkDurationMs"];
     const db = raw["dbHealthy"];
+    const okFlag = raw["ok"];
     const out: {
         checkDurationMs?: number;
         dbHealthy?: boolean;
@@ -75,6 +78,8 @@ function readStatusPayload(raw: unknown): {
     }
     if (typeof db === "boolean") {
         out.dbHealthy = db;
+    } else if (typeof okFlag === "boolean") {
+        out.dbHealthy = okFlag;
     }
     if (metrics !== undefined) {
         out.metrics = metrics;
@@ -198,6 +203,8 @@ export interface StressDashboardConfig {
     readonly plannedRounds: number;
     readonly scenario: string;
     readonly statusBaseUrl: string;
+    /** Same as Spire `DEV_API_KEY` — sent on `/status` polls when set. */
+    readonly devApiKey?: string;
     /** Read-only poll of harness trace SQLite (same file stress may write). */
     readonly traceLogPath: string | null;
 }
@@ -450,14 +457,26 @@ export class StressDashboard {
         const statusUrl = `${base}/status`;
         const processUrl = `${base}/status/process`;
         const sqliteUrl = `${base}/status/sqlite`;
+        const devKey = this.cfg.devApiKey?.trim() ?? "";
+        const devHeaders =
+            devKey.length > 0 ? { [DEV_API_KEY_HEADER]: devKey } : undefined;
 
         void Promise.all([
-            axios.get(statusUrl, { timeout: 1200, validateStatus: () => true }),
+            axios.get(statusUrl, {
+                timeout: 1200,
+                validateStatus: () => true,
+                headers: devHeaders,
+            }),
             axios.get(processUrl, {
                 timeout: 1200,
                 validateStatus: () => true,
+                headers: devHeaders,
             }),
-            axios.get(sqliteUrl, { timeout: 1200, validateStatus: () => true }),
+            axios.get(sqliteUrl, {
+                timeout: 1200,
+                validateStatus: () => true,
+                headers: devHeaders,
+            }),
         ])
             .then(([statusRes, procRes, sqliteRes]) => {
                 if (statusRes.status !== 200) {
