@@ -102,7 +102,10 @@ jobs:
                   load: true
                   tags: ${{ env.SPIRE_IMAGE_TAG }}
                   cache-from: type=gha
-                  cache-to: type=gha,mode=max
+                  # mode=min: cache only final stage layers (small, ~1-2GB across branches).
+                  # mode=max: cache every intermediate layer incl. build stage (stores node_modules twice, ~5-10GB).
+                  # Org shares a 10GB GHA cache bucket, so min keeps us from evicting other repos.
+                  cache-to: type=gha,mode=min
 
             - name: Generate keys and DEV_API_KEY
               run: |
