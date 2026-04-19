@@ -29,6 +29,8 @@
         "build": "tsc && node scripts/clean-dist-tests.mjs",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
+        "copyright:check": "node scripts/copyright-headers.mjs --check",
+        "copyright:apply": "node scripts/copyright-headers.mjs",
         "lint": "eslint src/ scripts/stress/",
         "lint:fix": "eslint src/ scripts/stress/ --fix",
         "prepare": "husky || true",

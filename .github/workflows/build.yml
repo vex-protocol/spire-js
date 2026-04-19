@@ -50,6 +50,9 @@ jobs:
             - name: ESLint
               run: npm run lint
 
+            - name: Copyright headers
+              run: npm run copyright:check
+
             - name: Prettier
               run: npm run format:check
 
