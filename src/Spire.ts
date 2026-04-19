@@ -42,7 +42,6 @@ export const TOKEN_EXPIRY = 1000 * 60 * 10;
 export const JWT_EXPIRY = "7d";
 export const DEVICE_AUTH_JWT_EXPIRY = "1h";
 const DEVICE_CHALLENGE_EXPIRY = 1000 * 60; // 60 seconds
-const STATUS_LATENCY_BUDGET_MS = 250;
 
 // 3-19 chars long
 const usernameRegex = /^(\w{3,19})$/;
@@ -440,20 +439,9 @@ export class Spire extends EventEmitter {
                     canaryEnv === "true" ||
                     canaryEnv === "yes",
                 checkDurationMs,
-                commitSha: this.commitSha,
-                dbHealthy,
-                dbReady: this.dbReady,
-                latencyBudgetMs: STATUS_LATENCY_BUDGET_MS,
-                metrics: {
-                    requestsTotal: this.requestsTotal,
-                },
                 now: new Date(),
                 ok,
-                startedAt: this.startedAt.toISOString(),
-                uptimeSeconds: Math.floor(process.uptime()),
                 version: this.version,
-                withinLatencyBudget:
-                    checkDurationMs <= STATUS_LATENCY_BUDGET_MS,
             });
         });
 
