@@ -131,7 +131,7 @@ function parseArgs(argv: string[]): {
     walls: number;
 } {
     let clientsRaw = "10";
-    let concRaw = "25,50";
+    let concRaw = "25";
     let seconds: number | undefined;
     let walls = 10;
     let scenario = "noise";
@@ -210,7 +210,7 @@ function printHelp(): void {
             "Options:",
             "  --walls <n>           flood walls per combo (default 10); sets SPIRE_STRESS_ROUNDS",
             "  --clients <n>[,n…]     client counts (default 10)",
-            "  --conc <n>[,n…]       per-client concurrency values (default 25,50)",
+            "  --conc <n>[,n…]       per-client concurrency values (default 25)",
             "  --seconds <n>         optional SPIRE_STRESS_MAX_WALL_SEC ceiling (wall time + paced gaps)",
             "  --scenario <name>     SPIRE_STRESS_SCENARIO (default noise)",
             "  --load immediate|paced  SPIRE_STRESS_LOAD_MODE (default immediate; legacy: continuous|burst)",

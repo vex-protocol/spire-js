@@ -88,7 +88,7 @@ jobs:
                   echo "Timed out waiting for Spire /status"
                   exit 1
 
-            # Matches `stress-cli-sweep` defaults: 10 clients, 10 walls/combo, conc 25+50 (2 combos), scenario noise.
+            # Matches `stress-cli-sweep` defaults: 10 clients, 10 walls/combo, conc 25, scenario noise.
             - name: stress:cli (default matrix)
               run: >-
                   npm run stress:cli --
