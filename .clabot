@@ -1,5 +1,5 @@
 {
   "contributors": [],
   "label": "cla-signed",
-  "message": "This repository requires a **Contributor License Agreement** (see `CLA.md` in the repo root). The following GitHub account(s) are not yet listed as covered: {{usersWithoutCLA}}. After you agree to the CLA, ask a maintainer to add your GitHub username to the `contributors` array in `.clabot`, then comment **@cla-bot check** on this PR."
+  "message": "This repository requires a **Contributor License Agreement** (see `CLA.md`). The following GitHub account(s) are not yet listed in `.clabot`: {{usersWithoutCLA}}. **Sign the CLA** at [vex.wtf/cla](https://vex.wtf/cla). After you are added to the `contributors` array (maintainers use [CLA admin](https://vex.wtf/cla-admin)), comment **@cla-bot check** on this PR."
 }
