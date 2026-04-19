@@ -1,5 +1,12 @@
 # @vex-chat/spire
 
+## 1.0.2
+
+### Patch Changes
+
+- 335818e: Bumps the `@vex-chat/crypto` dependency from `2.0.0` to `2.0.1`. No API or config changes required.
+- f728d94: Optional `DEV_API_KEY` lets matching `x-dev-api-key` requests skip in-process rate limits for local load testing. Adds an npm script that drives a local Spire via `@vex-chat/libvex`. (Replaces the earlier `SPIRE_STRESS_BYPASS_KEY` / `X-Spire-Stress-Bypass` naming.)
+
 ## 1.0.1
 
 ### Patch Changes
