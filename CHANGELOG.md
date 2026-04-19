@@ -1,5 +1,11 @@
 # @vex-chat/spire
 
+## 1.0.4
+
+### Patch Changes
+
+- 0d6ba99: The `/status` endpoint now returns only `{ ok }` for regular requests. The extended response fields (`canary`, database sizing information, etc.) are now gated behind the `DEV_API_KEY` header — set `DEV_API_KEY` in your environment and pass it as `x-dev-api-key` if your monitoring needs the full response.
+
 ## 1.0.3
 
 ### Patch Changes
