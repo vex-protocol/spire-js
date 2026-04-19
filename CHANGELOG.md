@@ -1,5 +1,11 @@
 # @vex-chat/spire
 
+## 1.0.3
+
+### Patch Changes
+
+- fdb4807: The `/status` endpoint no longer returns `commitSha`, `dbHealthy`, `dbReady`, `latencyBudgetMs`, `metrics`, `startedAt`, `uptimeSeconds`, and `withinLatencyBudget` fields. Operators relying on those fields should source equivalent signals from their own infrastructure monitoring.
+
 ## 1.0.2
 
 ### Patch Changes
