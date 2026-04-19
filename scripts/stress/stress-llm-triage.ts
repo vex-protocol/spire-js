@@ -1,4 +1,10 @@
 /**
+ * Copyright (c) 2020-2026 Vex Heavy Industries LLC
+ * Licensed under AGPL-3.0. See LICENSE for details.
+ * Commercial licenses available at vex.wtf
+ */
+
+/**
  * Send last fatal issue bundle (+ optional repo manifest) to an OpenAI-compatible
  * chat endpoint. The model is instructed to only use supplied JSON facts—no
  * invented root causes.

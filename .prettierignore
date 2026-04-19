@@ -10,6 +10,3 @@ package-lock.json
 
 # Plain-text tool version pins (asdf / setup-node / mise)
 .tool-versions
-
-# License checker failure reports
-license-error-*.md

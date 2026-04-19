@@ -1,5 +1,11 @@
 #!/usr/bin/env node
 /**
+ * Copyright (c) 2020-2026 Vex Heavy Industries LLC
+ * Licensed under AGPL-3.0. See LICENSE for details.
+ * Commercial licenses available at vex.wtf
+ */
+
+/**
  * Generates cryptographic keys for Spire's .env file:
  *
  *   SPK        — 64-byte Ed25519 secret (hex). Used for NaCl server signing.

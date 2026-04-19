@@ -1,4 +1,10 @@
 /**
+ * Copyright (c) 2020-2026 Vex Heavy Industries LLC
+ * Licensed under AGPL-3.0. See LICENSE for details.
+ * Commercial licenses available at vex.wtf
+ */
+
+/**
  * Shared LLM triage: load attachments, build payloads, POST to OpenAI-compatible API.
  * Used by the CLI (`stress-llm-triage.ts`) and optional offline triage flows.
  */

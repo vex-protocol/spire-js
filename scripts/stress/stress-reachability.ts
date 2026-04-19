@@ -1,4 +1,10 @@
 /**
+ * Copyright (c) 2020-2026 Vex Heavy Industries LLC
+ * Licensed under AGPL-3.0. See LICENSE for details.
+ * Commercial licenses available at vex.wtf
+ */
+
+/**
  * Classify errors where Spire is probably not running or not reachable on HTTP.
  * Used only to improve stress harness UX — no root-cause guessing beyond transport.
  */

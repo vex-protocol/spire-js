@@ -1,4 +1,10 @@
 /**
+ * Copyright (c) 2020-2026 Vex Heavy Industries LLC
+ * Licensed under AGPL-3.0. See LICENSE for details.
+ * Commercial licenses available at vex.wtf
+ */
+
+/**
  * Smaller snapshots for SSE / JSON responses so Node does not build multi‑MB
  * `JSON.stringify` strings on every telemetry flush (heap OOM under load).
  */

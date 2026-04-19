@@ -1,4 +1,10 @@
 /**
+ * Copyright (c) 2020-2026 Vex Heavy Industries LLC
+ * Licensed under AGPL-3.0. See LICENSE for details.
+ * Commercial licenses available at vex.wtf
+ */
+
+/**
  * Catalog of libvex `Client.*` surfaces exercised by the stress runner.
  * Record keys are the same strings shown in telemetry and the dashboard (library-shaped),
  * not internal opcode ids.

@@ -1,4 +1,10 @@
 /**
+ * Copyright (c) 2020-2026 Vex Heavy Industries LLC
+ * Licensed under AGPL-3.0. See LICENSE for details.
+ * Commercial licenses available at vex.wtf
+ */
+
+/**
  * Local stress harness against a running Spire.
  *
  * Prerequisites:
@@ -29,7 +35,7 @@
  * Wall pacing (`SPIRE_STRESS_LOAD_MODE`): canonical **`immediate`** (start the next flood wall as soon as
  * the previous finishes) or **`paced`** (sleep `SPIRE_STRESS_BURST_GAP_MS`, default 750, between walls).
  * Legacy **`continuous`** and **`burst`** are still accepted as aliases for `immediate` and `paced`.
- * Each “wall” is still one synchronized `Promise.all` over all slots — only the idle gap between walls changes.
+ * Each “wall” waits for every slot to finish (`Promise.allSettled` / soft tracking) — only the idle gap between walls changes.
  *
  * Bisecting limits: each stderr `[stress] wall` line includes offered≈slots/s (logical slot completions ×1000/wall_ms).
  * That is not raw HTTP RPS — noise/chat often do several requests per slot. Scale SPIRE_STRESS_CLIENTS and
@@ -231,7 +237,7 @@ async function oneReadBurst(
     });
     switch (scenario) {
         case "whoami":
-            await Promise.all(
+            await Promise.allSettled(
                 Array.from({ length: n }, (_, i) =>
                     settleWithTelemetry(
                         stats,
@@ -245,7 +251,7 @@ async function oneReadBurst(
             );
             return;
         case "servers":
-            await Promise.all(
+            await Promise.allSettled(
                 Array.from({ length: n }, (_, i) =>
                     settleWithTelemetry(
                         stats,
@@ -259,7 +265,7 @@ async function oneReadBurst(
             );
             return;
         default:
-            await Promise.all(
+            await Promise.allSettled(
                 Array.from({ length: n }, (_, i) =>
                     i % 2 === 0
                         ? settleWithTelemetry(
@@ -321,7 +327,7 @@ async function runBurstForAllClients(
         if (chatWorld === null) {
             throw new Error("chat scenario requires a shared ChatWorld.");
         }
-        await Promise.all(
+        await Promise.allSettled(
             clients.map((c, i) =>
                 oneChatBurst(
                     c,
@@ -337,7 +343,7 @@ async function runBurstForAllClients(
         );
         return clients.length * perClientConcurrency;
     }
-    await Promise.all(
+    await Promise.allSettled(
         clients.map((c) =>
             oneReadBurst(
                 c,

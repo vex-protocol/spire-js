@@ -1,4 +1,10 @@
 /**
+ * Copyright (c) 2020-2026 Vex Heavy Industries LLC
+ * Licensed under AGPL-3.0. See LICENSE for details.
+ * Commercial licenses available at vex.wtf
+ */
+
+/**
  * Headless stress matrix (CI-style): run spire-stress for each (clients × concurrency) combo.
  * Each child exits after **N flood walls** (default 10), not a time budget — use `--seconds` only if you also want a wall-time cap.
  *
@@ -123,6 +129,8 @@ function parseArgs(argv: string[]): {
     conc: number[];
     help: boolean;
     host: string | undefined;
+    /** When true, exit 0 unless Spire is unreachable (exit 2). Implies matrix is never shortened by `--stop-on-fail`. */
+    informational: boolean;
     loadPacing: StressLoadPacing;
     scenario: string;
     /** Optional `SPIRE_STRESS_MAX_WALL_SEC` ceiling (in addition to `--walls`). */
@@ -138,6 +146,7 @@ function parseArgs(argv: string[]): {
     let loadPacing: StressLoadPacing = "immediate";
     let burstGapMs: string | undefined;
     let host: string | undefined;
+    let informational = false;
     let stopOnFail = false;
     let help = false;
 
@@ -178,6 +187,8 @@ function parseArgs(argv: string[]): {
             burstGapMs = next();
         } else if (a === "--host") {
             host = next();
+        } else if (a === "--informational") {
+            informational = true;
         } else if (a === "--stop-on-fail") {
             stopOnFail = true;
         } else {
@@ -191,6 +202,7 @@ function parseArgs(argv: string[]): {
         conc: parseCommaNums("--conc", concRaw),
         help,
         host,
+        informational,
         loadPacing,
         scenario,
         seconds,

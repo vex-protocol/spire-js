@@ -1,4 +1,10 @@
 /**
+ * Copyright (c) 2020-2026 Vex Heavy Industries LLC
+ * Licensed under AGPL-3.0. See LICENSE for details.
+ * Commercial licenses available at vex.wtf
+ */
+
+/**
  * Chat-shaped load: WebSocket + one shared server/channel + mixed reads, group
  * sends, DMs, and history fetches (so other members exercise the same paths as
  * real recipients).

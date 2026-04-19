@@ -1,4 +1,10 @@
 /**
+ * Copyright (c) 2020-2026 Vex Heavy Industries LLC
+ * Licensed under AGPL-3.0. See LICENSE for details.
+ * Commercial licenses available at vex.wtf
+ */
+
+/**
  * Append-only SQLite log of harness steps + fatal incidents (for post-mortems).
  *
  * SPIRE_STRESS_TRACE=0     — disable (no file).

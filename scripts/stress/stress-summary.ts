@@ -1,4 +1,10 @@
 /**
+ * Copyright (c) 2020-2026 Vex Heavy Industries LLC
+ * Licensed under AGPL-3.0. See LICENSE for details.
+ * Commercial licenses available at vex.wtf
+ */
+
+/**
  * Human-readable final report for the Spire stress harness.
  * Set SPIRE_STRESS_JSON=1 to also print a machine-readable JSON block.
  * Per-surface facet tallies (same as web UI): SPIRE_STRESS_FACET_REPORT=1 or default on in quiet/CI (WEB=0).

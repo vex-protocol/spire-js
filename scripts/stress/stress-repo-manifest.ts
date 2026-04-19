@@ -1,4 +1,10 @@
 /**
+ * Copyright (c) 2020-2026 Vex Heavy Industries LLC
+ * Licensed under AGPL-3.0. See LICENSE for details.
+ * Commercial licenses available at vex.wtf
+ */
+
+/**
  * Build a compact file index of local source trees for LLM / issue triage.
  * Does not embed full repo text (too large for one context); use paths + hashes
  * so a model can ask to open specific files or you can attach slices manually.

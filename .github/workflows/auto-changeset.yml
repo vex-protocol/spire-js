@@ -35,7 +35,7 @@ jobs:
                   node-version-file: .tool-versions
                   cache: npm
 
-            - run: npm ci --ignore-scripts
+            - run: npm ci --ignore-scripts --prefer-offline
 
             - name: Configure git
               run: |

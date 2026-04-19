@@ -1,4 +1,10 @@
 /**
+ * Copyright (c) 2020-2026 Vex Heavy Industries LLC
+ * Licensed under AGPL-3.0. See LICENSE for details.
+ * Commercial licenses available at vex.wtf
+ */
+
+/**
  * Live run telemetry for the stress web UI (facets, failures, SSE push).
  */
 import type { StressLoadPacing } from "./stress-load-pacing.ts";

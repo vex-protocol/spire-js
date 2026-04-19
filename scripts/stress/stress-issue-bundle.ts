@@ -1,4 +1,10 @@
 /**
+ * Copyright (c) 2020-2026 Vex Heavy Industries LLC
+ * Licensed under AGPL-3.0. See LICENSE for details.
+ * Commercial licenses available at vex.wtf
+ */
+
+/**
  * Structured JSON written on fatal harness errors for GitHub issues / LLM triage.
  * Contains only observed data (run snapshot, error, telemetry slice, correlation).
  */

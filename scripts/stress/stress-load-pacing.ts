@@ -1,6 +1,12 @@
 /**
+ * Copyright (c) 2020-2026 Vex Heavy Industries LLC
+ * Licensed under AGPL-3.0. See LICENSE for details.
+ * Commercial licenses available at vex.wtf
+ */
+
+/**
  * Idle policy between completed flood walls. Each wall is still one synchronized
- * `Promise.all` over all client slots — this only controls whether the harness sleeps
+ * all slots completing each wall — this only controls whether the harness sleeps
  * before starting the next wall.
  *
  * Canonical: `immediate` | `paced`. Legacy env values `continuous` and `burst` are

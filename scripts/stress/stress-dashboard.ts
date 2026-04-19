@@ -1,4 +1,10 @@
 /**
+ * Copyright (c) 2020-2026 Vex Heavy Industries LLC
+ * Licensed under AGPL-3.0. See LICENSE for details.
+ * Commercial licenses available at vex.wtf
+ */
+
+/**
  * top-style full-screen TUI for the Spire stress harness (no extra deps).
  */
 import type { StressClientViz } from "./stress-client-viz.ts";
