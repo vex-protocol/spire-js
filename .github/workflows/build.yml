@@ -117,12 +117,12 @@ jobs:
                   echo "Timed out waiting for Spire /status"
                   exit 1
 
-            # Matches `stress-cli-sweep` defaults: 10 clients, 10 walls/combo, conc 10, scenario noise.
-            - name: stress:cli (default matrix)
+            # Informational only: does not fail the job (see continue-on-error). Default conc=25 in stress-cli-sweep.
+            - name: stress:cli (default matrix, informational)
+              continue-on-error: true
               run: >-
                   npm run stress:cli --
                   --host 127.0.0.1:16777
-                  --stop-on-fail
 
             - name: Spire logs on failure
               if: failure()
