@@ -1,5 +1,12 @@
 # @vex-chat/spire
 
+## 1.0.4
+
+### Patch Changes
+
+- 0d6ba99: The `/status` endpoint now returns only `{ ok }` for regular requests. The extended response fields (`canary`, database sizing information, etc.) are now gated behind the `DEV_API_KEY` header — set `DEV_API_KEY` in your environment and pass it as `x-dev-api-key` if your monitoring needs the full response.
+- c9853bf: HTTP request logging via `morgan` is back. UUIDs in request URLs are replaced with `[uuid]` before the log line is written, so per-request traces no longer leak user or resource identifiers to stdout. No config changes required.
+
 ## 1.0.3
 
 ### Patch Changes
