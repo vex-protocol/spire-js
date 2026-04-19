@@ -55,7 +55,7 @@
         "@types/node": "25.6.0",
         "@types/uuid": "10.0.0",
         "@types/ws": "8.18.1",
-        "@vex-chat/libvex": "5.0.0",
+        "@vex-chat/libvex": "5.1.0",
         "@vitest/eslint-plugin": "1.6.15",
         "axios": "1.15.0",
         "eslint": "10.2.0",
