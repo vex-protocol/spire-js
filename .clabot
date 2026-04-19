@@ -1,5 +1,5 @@
 {
   "contributors": [],
   "label": "cla-signed",
-  "message": "This repository requires a **Contributor License Agreement** (see `CLA.md`). The following GitHub account(s) are not yet listed in `.clabot`: {{usersWithoutCLA}}. **Sign the CLA** at [vex.wtf/cla](https://vex.wtf/cla). After you are added to the `contributors` array (maintainers use [CLA admin](https://vex.wtf/cla-admin)), comment **@cla-bot check** on this PR."
+  "message": "This repository requires a [Contributor License Agreement](https://github.com/vex-protocol/spire-js/blob/main/CLA.md) (**CLA.md** in the repo root). The following GitHub account(s) are not yet listed as covered: {{usersWithoutCLA}}. After you agree, sign the CLA at **https://vex.wtf/cla** (open this from your pull request — do not use the main site menu). Maintainers add your username to the `contributors` array in `.clabot`; then comment **@cla-bot check** on this PR."
 }

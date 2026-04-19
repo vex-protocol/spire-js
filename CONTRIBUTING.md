@@ -6,7 +6,7 @@
 
 Typical ways this is handled:
 
-- **[cla-bot](https://github.com/apps/cla-bot)** (recommended): the [`.clabot`](./.clabot) file lists GitHub usernames that have a CLA on file. Install the GitHub App on this repo (org settings → GitHub Apps), then add approved usernames to `contributors`. Contributors sign at **[vex.wtf/cla](https://vex.wtf/cla)**; maintainers can use **[CLA admin](https://vex.wtf/cla-admin)** (when configured). Re-check with **`@cla-bot check`** on the PR.
+- **[cla-bot](https://github.com/apps/cla-bot)** (recommended): the [`.clabot`](./.clabot) file lists GitHub usernames that have a CLA on file. Install the GitHub App on this repo (org settings → GitHub Apps), then add approved usernames to `contributors`. When a PR needs a CLA, **cla-bot** posts a comment with links to [CLA.md](./CLA.md) and **[vex.wtf/cla](https://vex.wtf/cla)** — use that link from the PR (the main site does not advertise this flow in the nav). Maintainers use **Admin → CLA approvals** on vex.wtf when signed in. Re-check with **`@cla-bot check`** on the PR.
 - **GitHub CLA Assistant** (or similar): alternative if you prefer that flow.
 - **Manual**: maintainers record that the contributor commented on the PR (e.g. “I agree to the CLA”) or returned a signed copy, consistent with your counsel’s guidance.
 
