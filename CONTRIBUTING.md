@@ -6,8 +6,11 @@
 
 Typical ways this is handled:
 
-- **GitHub CLA Assistant** (or similar): configure the bot so contributors sign electronically when they open a pull request.
+- **[cla-bot](https://github.com/apps/cla-bot)** (recommended): the [`.clabot`](./.clabot) file lists GitHub usernames that have a CLA on file. Install the GitHub App on this repo (org settings → GitHub Apps), then add approved usernames to `contributors`. Contributors can trigger a re-check with **`@cla-bot check`** on the PR.
+- **GitHub CLA Assistant** (or similar): alternative if you prefer that flow.
 - **Manual**: maintainers record that the contributor commented on the PR (e.g. “I agree to the CLA”) or returned a signed copy, consistent with your counsel’s guidance.
+
+**Before the first external PR:** add maintainer GitHub usernames to `.clabot` → `contributors` so your own PRs pass the check. Optionally make the **`cla-bot`** / **`verification/cla-signed`** status a required check in branch protection.
 
 Trivial changes (e.g. typo fixes) are often handled under the same policy your lawyers prefer—align this section with them.
 
