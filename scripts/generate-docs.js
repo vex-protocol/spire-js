@@ -198,55 +198,25 @@ const endpointOverrides = {
         },
     },
     "get /status": {
-        summary: "Detailed runtime status",
+        summary: "Liveness and (with dev key) detailed status",
         description:
-            "Operational status endpoint including uptime, build metadata, health-check timing, basic runtime counters, and boolean `canary` from env `CANARY`.",
+            "Without a valid `x-dev-api-key` matching env `DEV_API_KEY`, returns only `{ ok }` (database health). With the dev key, includes `canary` (from env `CANARY`), `checkDurationMs`, `now`, and `version`.",
         responses: {
             200: {
-                description: "Detailed status payload.",
+                description:
+                    "Minimal `{ ok }` for anonymous callers, or full payload when the dev API key is presented.",
                 content: {
                     "application/json": {
                         schema: {
                             type: "object",
                             properties: {
-                                canary: { type: "boolean" },
                                 ok: { type: "boolean" },
-                                uptimeSeconds: { type: "integer" },
-                                startedAt: {
-                                    type: "string",
-                                    format: "date-time",
-                                },
+                                canary: { type: "boolean" },
+                                checkDurationMs: { type: "integer" },
                                 now: { type: "string", format: "date-time" },
                                 version: { type: "string" },
-                                commitSha: { type: "string" },
-                                checkDurationMs: { type: "integer" },
-                                latencyBudgetMs: { type: "integer" },
-                                withinLatencyBudget: { type: "boolean" },
-                                metrics: {
-                                    type: "object",
-                                    properties: {
-                                        requestsTotal: { type: "integer" },
-                                    },
-                                    required: ["requestsTotal"],
-                                },
-                                dbReady: { type: "boolean" },
-                                dbHealthy: { type: "boolean" },
                             },
-                            required: [
-                                "canary",
-                                "ok",
-                                "uptimeSeconds",
-                                "startedAt",
-                                "now",
-                                "version",
-                                "commitSha",
-                                "checkDurationMs",
-                                "latencyBudgetMs",
-                                "withinLatencyBudget",
-                                "metrics",
-                                "dbReady",
-                                "dbHealthy",
-                            ],
+                            required: ["ok"],
                         },
                     },
                 },

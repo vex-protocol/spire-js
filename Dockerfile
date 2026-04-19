@@ -31,6 +31,6 @@ ENV NODE_ENV=production
 EXPOSE 16777
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget -qO- http://localhost:16777/status || exit 1
+    CMD wget -qO- http://localhost:16777/healthz || exit 1
 
 ENTRYPOINT ["node", "--experimental-strip-types", "/app/src/run.ts"]

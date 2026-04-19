@@ -432,12 +432,16 @@ export class Spire extends EventEmitter {
             res.json({ dbReady: true, ok: true });
         });
 
-        this.api.get("/status", async (_req, res) => {
+        this.api.get("/status", async (req, res) => {
             const started = Date.now();
             const dbHealthy = this.dbReady ? await this.db.isHealthy() : false;
             const checkDurationMs = Date.now() - started;
 
             const ok = dbHealthy;
+            if (!devApiKeySkipsRateLimits(req)) {
+                res.json({ ok });
+                return;
+            }
             const canaryEnv = process.env["CANARY"]?.trim().toLowerCase();
             res.json({
                 canary:

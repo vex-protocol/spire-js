@@ -901,6 +901,7 @@ async function main(): Promise<void> {
                     clientCount: sessionClientCount,
                     clientViz,
                     concurrencySnapshot: knobsRef.knobs.concurrency,
+                    devApiKey,
                     forever,
                     host,
                     httpStats,
