@@ -11,7 +11,12 @@
  *   DEV_API_KEY=secret npm run stress:cli -- --scenario chat --stop-on-fail
  */
 
+import type { StressUiFacetRow } from "./stress-telemetry.ts";
+
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { readFileSync, unlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -21,6 +26,69 @@ import {
     parseStressLoadPacing,
     type StressLoadPacing,
 } from "./stress-load-pacing.ts";
+import {
+    formatStressFacetCiReport,
+    mergeStressFacetRowLists,
+    type StressFacetDumpV1,
+} from "./stress-summary.ts";
+
+function isRecord(x: unknown): x is Record<PropertyKey, unknown> {
+    return typeof x === "object" && x !== null;
+}
+
+function isStressUiFacetRow(x: unknown): x is StressUiFacetRow {
+    if (!isRecord(x)) {
+        return false;
+    }
+    const r = x;
+    const g = r["group"];
+    const status = r["status"];
+    return (
+        typeof r["id"] === "string" &&
+        typeof r["apiCall"] === "string" &&
+        typeof r["description"] === "string" &&
+        typeof r["fail"] === "number" &&
+        typeof r["ok"] === "number" &&
+        typeof r["protocolPath"] === "string" &&
+        typeof r["title"] === "string" &&
+        (g === "bootstrap" || g === "load" || g === "world") &&
+        (status === "idle" ||
+            status === "ok" ||
+            status === "warn" ||
+            status === "fail")
+    );
+}
+
+function parseFacetDumpFile(raw: string): StressFacetDumpV1 | null {
+    let data: unknown;
+    try {
+        data = JSON.parse(raw) as unknown;
+    } catch {
+        return null;
+    }
+    if (!isRecord(data)) {
+        return null;
+    }
+    const o = data;
+    if (o["v"] !== 1) {
+        return null;
+    }
+    if (typeof o["host"] !== "string" || typeof o["scenario"] !== "string") {
+        return null;
+    }
+    const facetsIn = o["facets"];
+    if (!Array.isArray(facetsIn)) {
+        return null;
+    }
+    const facets: StressUiFacetRow[] = [];
+    for (const row of facetsIn) {
+        if (!isStressUiFacetRow(row)) {
+            return null;
+        }
+        facets.push(row);
+    }
+    return { v: 1, host: o["host"], scenario: o["scenario"], facets };
+}
 
 const SPIRE_JS_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const STRESS_ENTRY = join(
@@ -63,7 +131,7 @@ function parseArgs(argv: string[]): {
     walls: number;
 } {
     let clientsRaw = "10";
-    let concRaw = "25,50";
+    let concRaw = "25";
     let seconds: number | undefined;
     let walls = 10;
     let scenario = "noise";
@@ -142,7 +210,7 @@ function printHelp(): void {
             "Options:",
             "  --walls <n>           flood walls per combo (default 10); sets SPIRE_STRESS_ROUNDS",
             "  --clients <n>[,n…]     client counts (default 10)",
-            "  --conc <n>[,n…]       per-client concurrency values (default 25,50)",
+            "  --conc <n>[,n…]       per-client concurrency values (default 25)",
             "  --seconds <n>         optional SPIRE_STRESS_MAX_WALL_SEC ceiling (wall time + paced gaps)",
             "  --scenario <name>     SPIRE_STRESS_SCENARIO (default noise)",
             "  --load immediate|paced  SPIRE_STRESS_LOAD_MODE (default immediate; legacy: continuous|burst)",
@@ -152,6 +220,8 @@ function printHelp(): void {
             "  -h, --help",
             "",
             "Child runs with SPIRE_STRESS_WEB=0 (quiet stderr). Per-wall logs: SPIRE_STRESS_VERBOSE=1 on the child.",
+            "  Facet CI table: each child defers stdout; after the full matrix, one merged ✓/✗ table is printed (same as summing per-combo dumps). Direct spire-stress (not stress:cli) still prints its own table.",
+            "  SPIRE_STRESS_FACET_REPORT=0 off, =1 on, =all include idle surfaces. SPIRE_STRESS_JSON=1 adds facets[] in JSON.",
             "",
         ].join("\n"),
     );
@@ -211,6 +281,7 @@ async function main(): Promise<void> {
     let worst = 0;
     let combo = 0;
     const total = opts.clients.length * opts.conc.length;
+    const facetDumpPaths: string[] = [];
 
     const cap =
         opts.seconds !== undefined
@@ -226,6 +297,11 @@ async function main(): Promise<void> {
             process.stderr.write(
                 `--- [${String(combo)}/${String(total)}] clients=${String(c)} concurrency=${String(n)} ---\n`,
             );
+            const dumpPath = join(
+                tmpdir(),
+                `spire-stress-facet-${String(combo)}-${randomUUID()}.json`,
+            );
+            facetDumpPaths.push(dumpPath);
             const env: Record<string, string> = {
                 DEV_API_KEY: dev,
                 SPIRE_STRESS_CLIENTS: String(c),
@@ -237,6 +313,10 @@ async function main(): Promise<void> {
                 SPIRE_STRESS_WEB: "0",
                 SPIRE_STRESS_OPEN_BROWSER: "0",
                 SPIRE_STRESS_LOAD_MODE: opts.loadPacing,
+                /** Parent merges facet JSON after the matrix; suppress per-child stdout table. */
+                SPIRE_STRESS_FACET_DEFER: "1",
+                SPIRE_STRESS_FACET_REPORT: "0",
+                SPIRE_STRESS_FACET_DUMP_PATH: dumpPath,
                 NODE_ENV: process.env["NODE_ENV"] ?? "development",
             };
             if (opts.seconds !== undefined) {
@@ -268,6 +348,45 @@ async function main(): Promise<void> {
                 process.exit(2);
             }
         }
+    }
+
+    let hostForReport =
+        opts.host?.trim() ??
+        process.env["SPIRE_STRESS_HOST"]?.trim() ??
+        "127.0.0.1:16777";
+    const rowLists: StressUiFacetRow[][] = [];
+    for (const p of facetDumpPaths) {
+        try {
+            const raw = readFileSync(p, "utf8");
+            const j = parseFacetDumpFile(raw);
+            if (j !== null) {
+                if (j.host.length > 0) {
+                    hostForReport = j.host;
+                }
+                rowLists.push(j.facets);
+            }
+        } catch {
+            /* combo may have crashed before write */
+        }
+        try {
+            unlinkSync(p);
+        } catch {
+            /* ignore */
+        }
+    }
+    if (rowLists.length > 0) {
+        const merged = mergeStressFacetRowLists(rowLists);
+        const headline = `stress:cli matrix · ${String(rowLists.length)} run(s) · scenario=${opts.scenario} · target=${hostForReport} · clients ${opts.clients.join(",")} · conc ${opts.conc.join(",")}`;
+        process.stdout.write(
+            formatStressFacetCiReport(
+                {
+                    scenario: opts.scenario,
+                    host: hostForReport,
+                    facets: merged,
+                },
+                { headline },
+            ),
+        );
     }
 
     process.stderr.write("\n" + rows.join("\n") + "\n\n");

@@ -134,7 +134,19 @@ export class Database extends EventEmitter {
         { devices: Device[]; until: number }
     >();
 
+    /**
+     * Short TTL cache for {@link retrieveEmojiList} (key = server id, stored as
+     * `emojis.owner`). The noise harness fires `emoji.retrieveList` as a
+     * follow-up on ~1/25 successful ops, so this path can contend on SQLite
+     * before heavier surfaces. Invalidated on emoji create/delete.
+     */
+    private readonly emojiListByServerCache = new Map<
+        string,
+        { rows: Emoji[]; until: number }
+    >();
+
     private static readonly USER_DEVICE_LIST_CACHE_TTL_MS = 10_000;
+    private static readonly EMOJI_LIST_CACHE_TTL_MS = 10_000;
 
     constructor(options?: SpireOptions) {
         super();
@@ -234,6 +246,7 @@ export class Database extends EventEmitter {
 
     public async close(): Promise<void> {
         this.userDeviceListCache.clear();
+        this.emojiListByServerCache.clear();
         await this.db.destroy();
     }
 
@@ -282,6 +295,7 @@ export class Database extends EventEmitter {
 
     public async createEmoji(emoji: Emoji): Promise<void> {
         await this.db.insertInto("emojis").values(emoji).execute();
+        this.emojiListByServerCache.delete(emoji.owner);
     }
 
     public async createFile(file: FileSQL): Promise<void> {
@@ -431,10 +445,14 @@ export class Database extends EventEmitter {
     }
 
     public async deleteEmoji(emojiID: string): Promise<void> {
+        const existing = await this.retrieveEmoji(emojiID);
         await this.db
             .deleteFrom("emojis")
             .where("emojiID", "=", emojiID)
             .execute();
+        if (existing) {
+            this.emojiListByServerCache.delete(existing.owner);
+        }
     }
 
     public async deleteInvite(inviteID: string): Promise<void> {
@@ -700,12 +718,25 @@ export class Database extends EventEmitter {
         return rows[0] ?? null;
     }
 
-    public async retrieveEmojiList(userID: string): Promise<Emoji[]> {
-        return this.db
+    public async retrieveEmojiList(serverID: string): Promise<Emoji[]> {
+        const now = Date.now();
+        const hit = this.emojiListByServerCache.get(serverID);
+        if (hit && hit.until > now) {
+            return hit.rows.map((r) => ({ ...r }));
+        }
+
+        const rows: Emoji[] = await this.db
             .selectFrom("emojis")
             .selectAll()
-            .where("owner", "=", userID)
+            .where("owner", "=", serverID)
             .execute();
+
+        this.emojiListByServerCache.set(serverID, {
+            rows: rows.map((r) => ({ ...r })),
+            until: now + Database.EMOJI_LIST_CACHE_TTL_MS,
+        });
+
+        return rows.map((r) => ({ ...r }));
     }
 
     public async retrieveFile(fileID: string): Promise<FileSQL | null> {
