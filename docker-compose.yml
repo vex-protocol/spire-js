@@ -30,7 +30,7 @@ services:
     nginx:
         image: nginx:alpine
         ports:
-            - "8080:8080"
+            - "16777:8080"
         entrypoint: ["nginx", "-g", "daemon off;"]
         volumes:
             - ./deploy/nginx.conf:/etc/nginx/nginx.conf:ro
