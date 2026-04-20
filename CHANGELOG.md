@@ -1,5 +1,13 @@
 # @vex-chat/spire
 
+## 1.0.4
+
+### Patch Changes
+
+- 3a2eb1d: CORS middleware now runs before helmet and auth, so browser preflight (`OPTIONS`) requests receive `Access-Control-*` headers even for unauthenticated routes. Browser clients (web, Tauri, Capacitor) that were being blocked by CORS errors should work without any config changes. The allowed-methods list is now explicit: `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`.
+- 0d6ba99: The `/status` endpoint now returns only `{ ok }` for regular requests. The extended response fields (`canary`, database sizing information, etc.) are now gated behind the `DEV_API_KEY` header — set `DEV_API_KEY` in your environment and pass it as `x-dev-api-key` if your monitoring needs the full response.
+- c9853bf: HTTP request logging via `morgan` is back. UUIDs in request URLs are replaced with `[uuid]` before the log line is written, so per-request traces no longer leak user or resource identifiers to stdout. No config changes required.
+
 ## 1.0.3
 
 ### Patch Changes
