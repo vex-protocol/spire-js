@@ -198,16 +198,10 @@ export const initApp = (
             type: "application/msgpack",
         }),
     );
-    api.use(helmet());
-    api.use(msgpackParser);
-    api.use(checkAuth);
-    api.use(checkDevice);
 
-    // Browser clients (web, Tauri, Capacitor, etc.) hit Spire from arbitrary
-    // origins when self-hosted or embedded in third-party apps. libvex uses
-    // `Authorization: Bearer` only (no cookies), so reflecting `Origin` is the
-    // usual bearer-API pattern. Set `CORS_ORIGINS` to a comma-separated allowlist
-    // when an operator wants to restrict which frontends may call the API.
+    // CORS before helmet/auth so browser preflight (OPTIONS) and PATCH get
+    // Access-Control-* headers. Node clients ignore CORS; browsers do not.
+    // Set `CORS_ORIGINS` to a comma-separated allowlist to restrict frontends.
     const corsRaw = process.env["CORS_ORIGINS"];
     const corsOrigins = corsRaw
         ? corsRaw
@@ -218,12 +212,26 @@ export const initApp = (
     api.use(
         cors({
             credentials: true,
+            methods: [
+                "GET",
+                "HEAD",
+                "POST",
+                "PUT",
+                "PATCH",
+                "DELETE",
+                "OPTIONS",
+            ],
             origin:
                 corsOrigins.length > 0
                     ? corsOrigins
                     : true /* reflect request Origin */,
         }),
     );
+
+    api.use(helmet());
+    api.use(msgpackParser);
+    api.use(checkAuth);
+    api.use(checkDevice);
 
     api.get("/server/:id", protect, async (req, res) => {
         const server = await db.retrieveServer(getParam(req, "id"));
