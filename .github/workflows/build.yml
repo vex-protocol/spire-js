@@ -119,7 +119,7 @@ jobs:
               run: |
                   set -euo pipefail
                   docker run -d --name "${{ env.SPIRE_CONTAINER_NAME }}" \
-                    -p 127.0.0.1:16777:16777 \
+                    -p 127.0.0.1:8080:8080 \
                     -e NODE_ENV=production \
                     -e DB_TYPE=sqlite3 \
                     -e "SPK=${SPK}" \
@@ -131,7 +131,7 @@ jobs:
               run: |
                   set -euo pipefail
                   for _ in $(seq 1 90); do
-                    if curl -sf --connect-timeout 2 "http://127.0.0.1:16777/healthz" >/dev/null; then
+                    if curl -sf --connect-timeout 2 "http://127.0.0.1:8080/healthz" >/dev/null; then
                       echo "Spire is up."
                       exit 0
                     fi
@@ -145,7 +145,7 @@ jobs:
               continue-on-error: true
               run: >-
                   npm run stress:cli --
-                  --host 127.0.0.1:16777
+                  --host 127.0.0.1:8080
 
             - name: Spire logs on failure
               if: failure()

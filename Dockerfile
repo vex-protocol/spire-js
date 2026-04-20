@@ -28,9 +28,9 @@ WORKDIR /data
 
 ENV NODE_ENV=production
 
-EXPOSE 16777
+EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget -qO- http://localhost:16777/healthz || exit 1
+    CMD wget -qO- http://localhost:8080/healthz || exit 1
 
 ENTRYPOINT ["node", "--experimental-strip-types", "/app/src/run.ts"]

@@ -365,7 +365,7 @@ async function main(): Promise<void> {
     let hostForReport =
         opts.host?.trim() ??
         process.env["SPIRE_STRESS_HOST"]?.trim() ??
-        "127.0.0.1:16777";
+        "127.0.0.1:8080";
     const rowLists: StressUiFacetRow[][] = [];
     for (const p of facetDumpPaths) {
         try {

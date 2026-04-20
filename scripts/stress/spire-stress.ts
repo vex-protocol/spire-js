@@ -594,7 +594,7 @@ function printSpireStressCliHelp(): void {
             "Requires DEV_API_KEY (same value as on the Spire process).",
             "",
             "Environment (common):",
-            "  SPIRE_STRESS_HOST              default 127.0.0.1:16777",
+            "  SPIRE_STRESS_HOST              default 127.0.0.1:8080",
             "  SPIRE_STRESS_SCENARIO          mixed | noise | chat | …",
             "  SPIRE_STRESS_CLIENTS           default 10",
             "  SPIRE_STRESS_CONCURRENCY       parallel ops per client per wall",
@@ -638,7 +638,7 @@ async function main(): Promise<void> {
     // `devApiKey` in `Client.create` options so Spire sees `x-dev-api-key` on API traffic.
     axios.defaults.headers.common[DEV_API_KEY_HEADER] = devApiKey;
 
-    const host = process.env["SPIRE_STRESS_HOST"] ?? "127.0.0.1:16777";
+    const host = process.env["SPIRE_STRESS_HOST"] ?? "127.0.0.1:8080";
     const initialConcurrency = Math.max(
         1,
         Number(process.env["SPIRE_STRESS_CONCURRENCY"] ?? "25"),

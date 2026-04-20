@@ -5,7 +5,7 @@ Poll Spire's HTTP snapshots and (optionally) the stress harness SQLite trace.
 Uses only the stdlib. Intended as a separate "spy" process from Node stress/Spire.
 
 Environment (same as stress):
-  SPIRE_STRESS_HOST     default 127.0.0.1:16777
+  SPIRE_STRESS_HOST     default 127.0.0.1:8080
   DEV_API_KEY           required for /status/process
   SPIRE_STRESS_TRACE_DB optional — tail harness_events counts / last row
 
@@ -114,7 +114,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    host = os.environ.get("SPIRE_STRESS_HOST", "127.0.0.1:16777").strip()
+    host = os.environ.get("SPIRE_STRESS_HOST", "127.0.0.1:8080").strip()
     key = (os.environ.get("DEV_API_KEY") or "").strip()
     trace_db = (os.environ.get("SPIRE_STRESS_TRACE_DB") or "").strip()
     if not trace_db:

@@ -35,7 +35,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Compose builds the image from this repo’s `Dockerfile`, starts Spire with a persistent **`spire-data`** volume mounted at `/data` (SQLite + `files/`, `avatars/`, `emoji/`), and fronts it with **nginx** on **port 8080**. Use **http://localhost:8080** for HTTP and WebSocket.
+Compose builds the image from this repo’s `Dockerfile`, starts Spire with a persistent **`spire-data`** volume mounted at `/data` (SQLite + `files/`, `avatars/`, `emoji/`), and publishes **port 8080** on the host (same default as `npm start`). Use **http://localhost:8080** for HTTP and WebSocket. Point your **host** reverse proxy at `http://127.0.0.1:8080` once; you do not need different ports for Docker vs bare Node.
 
 ## Running without Docker
 
@@ -68,7 +68,7 @@ Spire reads configuration from environment variables. **Docker Compose:** put th
 
 | Variable       | Default   | Description                                                                                                                                                                                                                                                                                                                                                                                            |
 | -------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `API_PORT`     | `16777`   | Port for the REST API and WebSocket server (see `Spire` default in code if unset).                                                                                                                                                                                                                                                                                                                     |
+| `API_PORT`     | `8080`    | Port for the REST API and WebSocket server (see `Spire` default in code if unset).                                                                                                                                                                                                                                                                                                                     |
 | `NODE_ENV`     | _(unset)_ | Set to `production` to disable interactive `/docs` / `/async-docs`. If unset or any other value, doc viewers are mounted. `helmet()` runs in all modes.                                                                                                                                                                                                                                                |
 | `CORS_ORIGINS` | _(empty)_ | Comma-separated allowed `Origin` values. If set, only those origins may use credentialed browser requests. If unset, Spire **reflects the request `Origin`** so self-hosted Spire and arbitrary app origins (Tauri, localhost, etc.) work without configuration — appropriate for bearer-token APIs; set an allowlist if you need to restrict which sites may call your instance from users' browsers. |
 | `DEV_API_KEY`  | _(empty)_ | When set, requests that send header `x-dev-api-key` with the same value (constant-time compare) **skip in-process rate limiters**. The same gate enables **`GET /status/process`** (404 without a valid key): a small JSON snapshot of the Spire Node process (PID, uptime, `memoryUsage`, cumulative `resourceUsage`, WebSocket client count). Dev / load-testing only — never set in production.     |
@@ -82,7 +82,7 @@ SPK=a1b2c3...
 JWT_SECRET=d4e5f6...
 DB_TYPE=sqlite
 # CANARY=true
-API_PORT=16777
+API_PORT=8080
 NODE_ENV=production
 ```
 

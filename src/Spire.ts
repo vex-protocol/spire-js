@@ -190,7 +190,7 @@ export class Spire extends EventEmitter {
             });
         });
 
-        this.init(options?.apiPort || 16777);
+        this.init(options?.apiPort || 8080);
     }
 
     public async close(): Promise<void> {
