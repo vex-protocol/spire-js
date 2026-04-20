@@ -33,7 +33,9 @@ services:
             - "8080:8080"
         entrypoint: ["nginx", "-g", "daemon off;"]
         volumes:
-            - ./deploy/nginx.conf:/etc/nginx/nginx.conf:ro
+            # `deploy/nginx.conf` was mistakenly a directory — Docker cannot mount a dir as a file.
+            # Remove with: sudo rm -rf deploy/nginx.conf
+            - ./docker-nginx.conf:/etc/nginx/nginx.conf:ro
         depends_on:
             spire:
                 condition: service_healthy
