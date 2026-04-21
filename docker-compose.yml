@@ -18,6 +18,9 @@ services:
         networks:
             - internal
         restart: unless-stopped
+        # No Docker json-file log driver: avoids a second copy of stdout/stderr under
+        # /var/lib/docker/containers/ on the host. Routine output is only what you see
+        # from nginx + Spire when attached (or explicit redirects).
         logging:
             driver: none
         healthcheck:
@@ -57,6 +60,7 @@ services:
         mem_limit: 128m
         memswap_limit: 128m
         restart: unless-stopped
+        # Same as spire: no duplicate json-file logs on the host.
         logging:
             driver: none
 

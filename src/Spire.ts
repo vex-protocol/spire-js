@@ -243,11 +243,18 @@ export class Spire extends EventEmitter {
     private init(apiPort: number): void {
         // Request traces (UUIDs redacted in `url` token). Enabled in all envs,
         // including production / Docker — dependency is non-dev.
-        morgan.token("url", (req: IncomingMessage) => {
-            const r = req as IncomingMessage & { originalUrl?: string };
-            return redactUuidsForLog(r.originalUrl ?? r.url ?? "");
-        });
-        this.api.use(morgan("dev"));
+        const accessFlag = process.env["SPIRE_HTTP_ACCESS_LOG"];
+        const accessLogEnabled =
+            accessFlag !== "0" &&
+            accessFlag !== "false" &&
+            accessFlag !== "off";
+        if (accessLogEnabled) {
+            morgan.token("url", (req: IncomingMessage) => {
+                const r = req as IncomingMessage & { originalUrl?: string };
+                return redactUuidsForLog(r.originalUrl ?? r.url ?? "");
+            });
+            this.api.use(morgan("dev"));
+        }
 
         this.api.use((_req, _res, next) => {
             this.requestsTotal += 1;
