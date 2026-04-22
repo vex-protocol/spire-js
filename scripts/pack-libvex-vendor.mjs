@@ -1,5 +1,11 @@
 #!/usr/bin/env node
 /**
+ * Copyright (c) 2020-2026 Vex Heavy Industries LLC
+ * Licensed under AGPL-3.0. See LICENSE for details.
+ * Commercial licenses available at vex.wtf
+ */
+
+/**
  * Rebuild libvex-js and write `npm pack` output to `vendor/vex-chat-libvex-*.tgz`
  * (path is defined by libvex's package version). Run from the spire-js repo root.
  */

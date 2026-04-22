@@ -1,4 +1,10 @@
 /**
+ * Copyright (c) 2020-2026 Vex Heavy Industries LLC
+ * Licensed under AGPL-3.0. See LICENSE for details.
+ * Commercial licenses available at vex.wtf
+ */
+
+/**
  * Default HTTP/WS port for the Spire API (tweetnacl and FIPS), unless
  * `API_PORT` / `apiPort` is set. Clients can tell profiles apart via `GET /status`.
  */
