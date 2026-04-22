@@ -68,7 +68,7 @@ Anything else you edit — `.github/`, tsconfig, eslint config, `src/__tests__/*
 ## Deliberate shape choices (don't "fix" these)
 
 - **No `main`, `types`, `exports`, or `bin` field.** Spire is published as a "box of files" — operators install it to get the source and compiled output, and run it how they want (`node --experimental-strip-types node_modules/@vex-chat/spire/src/run.ts` or by cloning the repo). This is intentional. Don't add library entry points.
-- **`build.yml` runs `build` and `test` in `checks` (ubuntu), plus two Docker stress jobs: `stress (tweetnacl)` — `gen-spk.js`, default server profile — and `stress (FIPS)` — `gen-spk-fips.js`, `SPIRE_FIPS=true`, asserts `GET /status` → `fips`. Both build the same image and run `npm run stress:cli` against `127.0.0.1:16777` (informational). The repo used to run a multi-OS matrix for native edge cases; if you reintroduce that, don’t drop coverage without reason.
+- \*\*`build.yml` runs `build` and `test` in `checks` (ubuntu), plus two Docker stress jobs: `stress (tweetnacl)` — `gen-spk.js`, default server profile — and `stress (FIPS)` — `gen-spk-fips.js`, `SPIRE_FIPS=true`, asserts `GET /status` → `fips`. Both build the same image and run `npm run stress:cli` against `127.0.0.1:16777` (informational). The repo used to run a multi-OS matrix for native edge cases; if you reintroduce that, don’t drop coverage without reason.
 - **Running via `node --experimental-strip-types src/run.ts`** in dev and prod — no pre-compile step required. `dist/` is still built in CI as a sanity check and shipped in the tarball, but it's not the runtime entry point.
 
 ## Generated / machine-owned files
