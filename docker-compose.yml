@@ -7,6 +7,12 @@ services:
         volumes:
             - spire-data:/data
         env_file: .env
+        # tweetnacl (default): SPIRE_FIPS unset / false, SPK from `npm run gen-spk`
+        # fips: SPIRE_FIPS=true, SPK from `npm run gen-spk-fips` (P-256 PKCS#8)
+        # Shell overrides .env: SPIRE_FIPS=true docker compose up
+        environment:
+            - SPIRE_FIPS=${SPIRE_FIPS:-false}
+            - API_PORT=${API_PORT:-}
         user: "1000:1000"
         security_opt:
             - no-new-privileges:true
@@ -24,19 +30,26 @@ services:
         logging:
             driver: none
         healthcheck:
-            test: ["CMD", "wget", "-qO-", "http://localhost:16777/healthz"]
+            test: ["CMD", "/bin/sh", "/app/deploy/spire-container-health.sh"]
             interval: 30s
             timeout: 5s
-            start_period: 10s
+            # FIPS path awaits async crypto init; keep grace before failed probes count
+            start_period: 40s
             retries: 3
 
     nginx:
         image: nginx:alpine
         ports:
-            - "16777:8080"
-        entrypoint: ["nginx", "-g", "daemon off;"]
+            - "16777:16777"
+        # Upstream to Spire must follow its listen port (see src/spireListenPort.ts, deploy/resolve-spire-listen-port.sh)
+        environment:
+            - SPIRE_FIPS=${SPIRE_FIPS:-false}
+            - API_PORT=${API_PORT:-}
+        entrypoint: ["/bin/sh", "/docker-entrypoint.sh"]
         volumes:
-            - ./deploy/nginx.conf:/etc/nginx/nginx.conf:ro
+            - ./deploy/nginx.conf.template:/etc/nginx/nginx.conf.template:ro
+            - ./deploy/docker-nginx-entrypoint.sh:/docker-entrypoint.sh:ro
+            - ./deploy/resolve-spire-listen-port.sh:/opt/resolve-spire-listen-port.sh:ro
         depends_on:
             spire:
                 condition: service_healthy

@@ -31,11 +31,13 @@ From a clone, with Docker and Docker Compose installed:
 
 ```sh
 cp .env.example .env
-# set SPK, JWT_SECRET, DB_TYPE, … (see Configuration)
+# set SPK, JWT_SECRET, DB_TYPE, SPIRE_FIPS, … (see Configuration)
 docker compose up --build
 ```
 
-Compose builds the image from this repo’s `Dockerfile`, starts Spire with a persistent **`spire-data`** volume mounted at `/data` (SQLite + `files/`, `avatars/`, `emoji/`), and fronts it with **nginx** on **port 8080**. Use **http://localhost:8080** for HTTP and WebSocket.
+**Crypto mode (tweetnacl vs FIPS):** `SPIRE_FIPS` in `.env` selects the server profile. It must match how you generated `SPK` — **`npm run gen-spk`** (Ed25519) for tweetnacl, or **`npm run gen-spk-fips`** (P-256) with **`SPIRE_FIPS=true`**. You can override for one run without editing `.env`: `SPIRE_FIPS=true docker compose up` (or `=false`).
+
+Compose builds the image from this repo’s `Dockerfile`, starts Spire with a persistent **`spire-data`** volume mounted at `/data` (SQLite + `files/`, `avatars/`, `emoji/`), and fronts it with **nginx** on host **port 16777** (see `ports` in `docker-compose.yml`). Spire itself listens on **16777** inside the `internal` network (same for tweetnacl and FIPS — `GET /status` reports the crypto profile). Nginx and the health check use `deploy/resolve-spire-listen-port.sh` to match. Use **http://127.0.0.1:16777** for HTTP and WebSocket.
 
 ## Running without Docker
 
@@ -58,21 +60,22 @@ Spire reads configuration from environment variables. **Docker Compose:** put th
 
 ### Required
 
-| Variable     | Description                                                                                                                                                                |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SPK`        | Server private key, hex-encoded. Generate with `npm run gen-spk` (prints `SPK` and `JWT_SECRET` lines). Used for server identity signing (NaCl).                           |
-| `JWT_SECRET` | Hex or string used as the **HMAC secret for JWTs** — **required** and must be **separate from `SPK`**. `npm run gen-spk` emits a dedicated value; do not reuse `SPK` here. |
-| `DB_TYPE`    | `sqlite3` or `sqlite3mem`. All values use **SQLite** via `better-sqlite3` (file or `:memory:`).                                                                            |
+| Variable     | Description                                                                                                                                                                                               |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SPK`        | Server private key, hex-encoded. **tweetnacl:** `npm run gen-spk` (Ed25519). **FIPS:** `npm run gen-spk-fips` and set `SPIRE_FIPS=true` (P-256 PKCS#8). Each command prints `SPK` and `JWT_SECRET` lines. |
+| `JWT_SECRET` | Hex or string used as the **HMAC secret for JWTs** — **required** and must be **separate from `SPK`**. `npm run gen-spk` emits a dedicated value; do not reuse `SPK` here.                                |
+| `DB_TYPE`    | `sqlite3` or `sqlite3mem`. All values use **SQLite** via `better-sqlite3` (file or `:memory:`).                                                                                                           |
 
 ### Optional
 
-| Variable       | Default   | Description                                                                                                                                                                                                                                                                                                                                                                                            |
-| -------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `API_PORT`     | `16777`   | Port for the REST API and WebSocket server (see `Spire` default in code if unset).                                                                                                                                                                                                                                                                                                                     |
-| `NODE_ENV`     | _(unset)_ | Set to `production` to disable interactive `/docs` / `/async-docs`. If unset or any other value, doc viewers are mounted. `helmet()` runs in all modes.                                                                                                                                                                                                                                                |
-| `CORS_ORIGINS` | _(empty)_ | Comma-separated allowed `Origin` values. If set, only those origins may use credentialed browser requests. If unset, Spire **reflects the request `Origin`** so self-hosted Spire and arbitrary app origins (Tauri, localhost, etc.) work without configuration — appropriate for bearer-token APIs; set an allowlist if you need to restrict which sites may call your instance from users' browsers. |
-| `DEV_API_KEY`  | _(empty)_ | When set, requests that send header `x-dev-api-key` with the same value (constant-time compare) **skip in-process rate limiters**. The same gate enables **`GET /status/process`** (404 without a valid key): a small JSON snapshot of the Spire Node process (PID, uptime, `memoryUsage`, cumulative `resourceUsage`, WebSocket client count). Dev / load-testing only — never set in production.     |
-| `CANARY`       | _(unset)_ |                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Variable       | Default    | Description                                                                                                                                                                                                                                                                                                                                                                                            |
+| -------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `SPIRE_FIPS`   | _falsy_    | If `true` or `1`, run the **FIPS** profile (P-256, Web Crypto). `SPK` must come from `npm run gen-spk-fips`, not `gen-spk`. Any other value uses **tweetnacl** (Ed25519) and `gen-spk`. In Docker Compose, the service passes `SPIRE_FIPS=${SPIRE_FIPS:-false}` so the shell or `.env` can set the mode.                                                                                               |
+| `API_PORT`     | (see text) | If unset, Spire listens on **16777** (all crypto profiles; use `GET /status` to see which). In Docker, nginx and the image healthcheck use `deploy/resolve-spire-listen-port.sh` to follow the same rule. Set explicitly to override.                                                                                                                                                                  |
+| `NODE_ENV`     | _(unset)_  | Set to `production` to disable interactive `/docs` / `/async-docs`. If unset or any other value, doc viewers are mounted. `helmet()` runs in all modes.                                                                                                                                                                                                                                                |
+| `CORS_ORIGINS` | _(empty)_  | Comma-separated allowed `Origin` values. If set, only those origins may use credentialed browser requests. If unset, Spire **reflects the request `Origin`** so self-hosted Spire and arbitrary app origins (Tauri, localhost, etc.) work without configuration — appropriate for bearer-token APIs; set an allowlist if you need to restrict which sites may call your instance from users' browsers. |
+| `DEV_API_KEY`  | _(empty)_  | When set, requests that send header `x-dev-api-key` with the same value (constant-time compare) **skip in-process rate limiters**. The same gate enables **`GET /status/process`** (404 without a valid key): a small JSON snapshot of the Spire Node process (PID, uptime, `memoryUsage`, cumulative `resourceUsage`, WebSocket client count). Dev / load-testing only — never set in production.     |
+| `CANARY`       | _(unset)_  |                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 ### Sample `.env`
 
@@ -82,7 +85,7 @@ SPK=a1b2c3...
 JWT_SECRET=d4e5f6...
 DB_TYPE=sqlite
 # CANARY=true
-API_PORT=16777
+# API_PORT=        # unset = 16777 unless you override
 NODE_ENV=production
 ```
 

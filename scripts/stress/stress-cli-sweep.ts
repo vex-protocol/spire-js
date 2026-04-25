@@ -136,6 +136,8 @@ function parseArgs(argv: string[]): {
     /** Optional `SPIRE_STRESS_MAX_WALL_SEC` ceiling (in addition to `--walls`). */
     seconds: number | undefined;
     stopOnFail: boolean;
+    /** Sets SPIRE_STRESS_VERBOSE=1 on the child (more stderr per wall). */
+    verbose: boolean;
     walls: number;
 } {
     let clientsRaw = "10";
@@ -149,6 +151,7 @@ function parseArgs(argv: string[]): {
     let informational = false;
     let stopOnFail = false;
     let help = false;
+    let verbose = false;
 
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
@@ -191,6 +194,8 @@ function parseArgs(argv: string[]): {
             informational = true;
         } else if (a === "--stop-on-fail") {
             stopOnFail = true;
+        } else if (a === "--verbose" || a === "-v") {
+            verbose = true;
         } else {
             throw new Error(`Unknown argument: ${String(a)}`);
         }
@@ -207,6 +212,7 @@ function parseArgs(argv: string[]): {
         scenario,
         seconds,
         stopOnFail,
+        verbose,
         walls,
     };
 }
@@ -229,9 +235,10 @@ function printHelp(): void {
             "  --burst-gap-ms <n>    SPIRE_STRESS_BURST_GAP_MS when load=paced",
             "  --host <host:port>    SPIRE_STRESS_HOST",
             "  --stop-on-fail        stop the matrix early if a child exits with code 1 (harness saw HTTP failures)",
+            "  -v, --verbose         set SPIRE_STRESS_VERBOSE=1 on the child (noisier per-wall stderr)",
             "  -h, --help",
             "",
-            "Child runs with SPIRE_STRESS_WEB=0 (quiet stderr). Per-wall logs: SPIRE_STRESS_VERBOSE=1 on the child.",
+            "Child runs with SPIRE_STRESS_WEB=0 (quiet stderr) unless -v. Per-wall logs: SPIRE_STRESS_VERBOSE=1 (or -v on stress:cli).",
             "  Facet CI table: each child defers stdout; after the full matrix, one merged ✓/✗ table is printed (same as summing per-combo dumps). Direct spire-stress (not stress:cli) still prints its own table.",
             "  SPIRE_STRESS_FACET_REPORT=0 off, =1 on, =all include idle surfaces. SPIRE_STRESS_JSON=1 adds facets[] in JSON.",
             "",
@@ -339,6 +346,9 @@ async function main(): Promise<void> {
             }
             if (opts.burstGapMs !== undefined) {
                 env["SPIRE_STRESS_BURST_GAP_MS"] = opts.burstGapMs;
+            }
+            if (opts.verbose) {
+                env["SPIRE_STRESS_VERBOSE"] = "1";
             }
 
             const code = await runChild(env);

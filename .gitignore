@@ -2,7 +2,9 @@ node_modules
 dist
 **/*.log
 .env
-*.tgz
+.env.*
+# npm pack in repo root only; vendor/ contains a committed libvex .tgz for CI
+/*.tgz
 .DS_Store
 
 files

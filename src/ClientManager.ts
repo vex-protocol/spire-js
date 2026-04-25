@@ -23,7 +23,6 @@ import { EventEmitter } from "events";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { xConcat, XUtils } from "@vex-chat/crypto";
-import { xSignOpen } from "@vex-chat/crypto";
 import { MailWSSchema, SocketAuthErrors } from "@vex-chat/types";
 
 import { parse as uuidParse, validate as uuidValidate } from "uuid";
@@ -31,6 +30,7 @@ import { parse as uuidParse, validate as uuidValidate } from "uuid";
 import { TOKEN_EXPIRY } from "./Spire.ts";
 import { createUint8UUID } from "./utils/createUint8UUID.ts";
 import { msgpack } from "./utils/msgpack.ts";
+import { spireXSignOpenAsync } from "./utils/spireXSignOpenAsync.ts";
 
 export const POWER_LEVELS = {
     CREATE: 50,
@@ -341,7 +341,7 @@ export class ClientManager extends EventEmitter {
             const devices = await this.db.retrieveUserDeviceList([user.userID]);
             let message: null | Uint8Array = null;
             for (const device of devices) {
-                const verified = xSignOpen(
+                const verified = await spireXSignOpenAsync(
                     msg.signed,
                     XUtils.decodeHex(device.signKey),
                 );

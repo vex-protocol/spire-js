@@ -9,12 +9,12 @@ import type { Database } from "../Database.ts";
 import express from "express";
 
 import { XUtils } from "@vex-chat/crypto";
-import { xSignOpen } from "@vex-chat/crypto";
 import { DevicePayloadSchema, TokenScopes } from "@vex-chat/types";
 
 import { stringify } from "uuid";
 
 import { msgpack } from "../utils/msgpack.ts";
+import { spireXSignOpenAsync } from "../utils/spireXSignOpenAsync.ts";
 
 import { censorUser, getParam, getUser } from "./utils.ts";
 
@@ -100,7 +100,7 @@ export const getUserRouter = (
         }
         const deviceData = parsed.data;
 
-        const token = xSignOpen(
+        const token = await spireXSignOpenAsync(
             XUtils.decodeHex(deviceData.signed),
             XUtils.decodeHex(deviceData.signKey),
         );

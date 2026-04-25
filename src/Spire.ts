@@ -19,9 +19,10 @@ import express from "express";
 import { XUtils } from "@vex-chat/crypto";
 import {
     type KeyPair,
+    setCryptoProfile,
     xRandomBytes,
     xSignKeyPairFromSecret,
-    xSignOpen,
+    xSignKeyPairFromSecretAsync,
 } from "@vex-chat/crypto";
 import {
     MailWSSchema,
@@ -41,8 +42,10 @@ import { Database, hashPasswordArgon2, verifyPassword } from "./Database.ts";
 import { initApp, protect } from "./server/index.ts";
 import { authLimiter, devApiKeySkipsRateLimits } from "./server/rateLimit.ts";
 import { censorUser, getParam, getUser } from "./server/utils.ts";
+import { resolveSpireListenPort } from "./spireListenPort.ts";
 import { getJwtSecret } from "./utils/jwtSecret.ts";
 import { msgpack } from "./utils/msgpack.ts";
+import { spireXSignOpenAsync } from "./utils/spireXSignOpenAsync.ts";
 
 // expiry of regkeys = 24hr
 export const TOKEN_EXPIRY = 1000 * 60 * 10;
@@ -132,18 +135,34 @@ const getCommitSha = (): string => {
     }
 };
 
-/** Hyphenated UUIDs in paths/query — replaced so request logs are less identifying. */
-function redactUuidsForLog(url: string): string {
-    return url.replace(
+/**
+ * Masks identifying material in the access-log URL: hyphenated UUIDs, and
+ * `/device/...` path segments that hold public-key material (32B ed25519 hex, or
+ * a longer P-256 SPKI hex in FIPS) — not the same pattern as a UUID.
+ */
+function redactAccessLogUrl(url: string): string {
+    let s = url.replace(
         /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
         "[uuid]",
     );
+    // Device id is a hex public key, not a UUID: strip the segment after /device/
+    s = s.replace(/(\/device\/)([0-9a-fA-F]{16,})(?=[/?#]|$)/g, "$1[device]");
+    return s;
 }
 
 export interface SpireOptions {
+    /** Default `tweetnacl`. For `fips`, use `Spire.createAsync` (FIPS key load is async). */
+    cryptoProfile?: "fips" | "tweetnacl";
+    /**
+     * TCP port for the HTTP/WS server. If omitted, `run.ts` + `resolveSpireListenPort`
+     * use the default (16777 for all profiles; crypto mode is in `GET /status`). Env: `API_PORT`.
+     */
     apiPort?: number;
     dbType?: "mysql" | "sqlite3" | "sqlite3mem" | "sqlite";
 }
+
+/** FIPS: sign key loaded inside `Spire.createAsync` before the constructor runs. */
+let pendingFipsKeyPair: KeyPair | null = null;
 
 export class Spire extends EventEmitter {
     private actionTokens: ActionToken[] = [];
@@ -170,10 +189,23 @@ export class Spire extends EventEmitter {
         maxPayload: 4096,
         noServer: true,
     });
+    private readonly cryptoProfile: "fips" | "tweetnacl";
 
     constructor(SK: string, options?: SpireOptions) {
         super();
-        this.signKeys = xSignKeyPairFromSecret(XUtils.decodeHex(SK));
+        this.cryptoProfile = options?.cryptoProfile ?? "tweetnacl";
+        if (pendingFipsKeyPair) {
+            this.signKeys = pendingFipsKeyPair;
+            pendingFipsKeyPair = null;
+        } else {
+            if (this.cryptoProfile === "fips") {
+                throw new Error(
+                    'FIPS: use `await Spire.createAsync(secretKeyHex, { ...options, cryptoProfile: "fips" })` instead of `new Spire()`.',
+                );
+            }
+            setCryptoProfile(this.cryptoProfile);
+            this.signKeys = xSignKeyPairFromSecret(XUtils.decodeHex(SK));
+        }
 
         // Trust a single proxy hop (nginx / cloudflare / load balancer).
         // Required so `req.ip` and `express-rate-limit`'s keyGenerator see
@@ -190,7 +222,34 @@ export class Spire extends EventEmitter {
             });
         });
 
-        this.init(options?.apiPort || 16777);
+        this.init(resolveSpireListenPort(options?.apiPort));
+    }
+
+    /**
+     * Construct Spire when the crypto profile is `fips` (async sign-key derivation).
+     * For `tweetnacl` (default) you can use `new Spire()` directly.
+     */
+    public static async createAsync(
+        secretKeyHex: string,
+        options?: SpireOptions,
+    ): Promise<Spire> {
+        if ((options?.cryptoProfile ?? "tweetnacl") !== "fips") {
+            return new Spire(secretKeyHex, options);
+        }
+        if (typeof globalThis.crypto.subtle !== "object") {
+            throw new Error(
+                "FIPS: Spire requires `globalThis.crypto.subtle` (e.g. Node 20+ with global Web Crypto).",
+            );
+        }
+        setCryptoProfile("fips");
+        try {
+            pendingFipsKeyPair = await xSignKeyPairFromSecretAsync(
+                XUtils.decodeHex(secretKeyHex),
+            );
+            return new Spire(secretKeyHex, options);
+        } finally {
+            pendingFipsKeyPair = null;
+        }
     }
 
     public async close(): Promise<void> {
@@ -241,8 +300,8 @@ export class Spire extends EventEmitter {
     }
 
     private init(apiPort: number): void {
-        // Request traces (UUIDs redacted in `url` token). Enabled in all envs,
-        // including production / Docker — dependency is non-dev.
+        // Request traces (UUIDs and device public-key path segments redacted
+        // in the `url` token). Enabled in all envs, including production.
         const accessFlag = process.env["SPIRE_HTTP_ACCESS_LOG"];
         const accessLogEnabled =
             accessFlag !== "0" &&
@@ -251,7 +310,7 @@ export class Spire extends EventEmitter {
         if (accessLogEnabled) {
             morgan.token("url", (req: IncomingMessage) => {
                 const r = req as IncomingMessage & { originalUrl?: string };
-                return redactUuidsForLog(r.originalUrl ?? r.url ?? "");
+                return redactAccessLogUrl(r.originalUrl ?? r.url ?? "");
             });
             this.api.use(morgan("dev"));
         }
@@ -463,7 +522,7 @@ export class Spire extends EventEmitter {
 
             const ok = dbHealthy;
             if (!devApiKeySkipsRateLimits(req)) {
-                res.json({ ok });
+                res.json({ cryptoProfile: this.cryptoProfile, ok });
                 return;
             }
             const canaryEnv = process.env["CANARY"]?.trim().toLowerCase();
@@ -473,6 +532,7 @@ export class Spire extends EventEmitter {
                     canaryEnv === "true" ||
                     canaryEnv === "yes",
                 checkDurationMs,
+                cryptoProfile: this.cryptoProfile,
                 now: new Date(),
                 ok,
                 version: this.version,
@@ -620,7 +680,7 @@ export class Spire extends EventEmitter {
                 }
 
                 // Verify the Ed25519 signature
-                const opened = xSignOpen(
+                const opened = await spireXSignOpenAsync(
                     XUtils.decodeHex(signed),
                     XUtils.decodeHex(device.signKey),
                 );
@@ -771,7 +831,7 @@ export class Spire extends EventEmitter {
                     return;
                 }
 
-                const regKey = xSignOpen(
+                const regKey = await spireXSignOpenAsync(
                     XUtils.decodeHex(regPayload.signed),
                     XUtils.decodeHex(regPayload.signKey),
                 );

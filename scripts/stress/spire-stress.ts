@@ -54,7 +54,7 @@
  * `SPIRE_STRESS_VERBOSE=1`.
  */
 
-import type { Client } from "@vex-chat/libvex";
+import type { ClientOptions } from "@vex-chat/libvex";
 
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -65,6 +65,8 @@ import https from "node:https";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import readline from "node:readline";
+
+import { Client } from "@vex-chat/libvex";
 
 import axios from "axios";
 import { config } from "dotenv";
@@ -82,6 +84,7 @@ import {
     type StressCrashContext,
 } from "./stress-crash-dump.ts";
 import { StressDashboard } from "./stress-dashboard.ts";
+import { formatStressUncaughtError } from "./stress-error-format.ts";
 import {
     createHttpExpectStats,
     httpFailureTotal,
@@ -230,7 +233,7 @@ async function oneReadBurst(
     phase: string,
     burst: number,
 ): Promise<void> {
-    const ctx = (clientIndex?: number): TelemetryTouchCtx => ({
+    const ctx = (clientIndex: number): TelemetryTouchCtx => ({
         burst,
         clientIndex,
         phase,
@@ -368,24 +371,28 @@ async function bootstrapClient(
     burst: number,
 ): Promise<Client> {
     try {
-        const { Client } = await import("@vex-chat/libvex");
         const dbFolder = join(tmpdir(), `spire-stress-${randomUUID()}`);
         mkdirSync(dbFolder, { recursive: true });
 
         const bootCtx: TelemetryTouchCtx = { burst, phase };
+
+        const devKeyRaw = process.env["DEV_API_KEY"]?.trim();
+        const createOpts: ClientOptions = {
+            dbFolder,
+            host,
+            inMemoryDb: true,
+            unsafeHttp: true,
+            ...(devKeyRaw !== undefined && devKeyRaw.length > 0
+                ? { devApiKey: devKeyRaw }
+                : {}),
+        };
 
         const c = await settleWithTelemetry(
             stats,
             telemetry,
             "Client.create",
             bootCtx,
-            Client.create(undefined, {
-                dbFolder,
-                devApiKey: process.env["DEV_API_KEY"]?.trim() || undefined,
-                host,
-                inMemoryDb: true,
-                unsafeHttp: true,
-            }),
+            Client.create(undefined, createOpts),
             {
                 inputs: {
                     dbFolder: basename(dbFolder),
@@ -1418,7 +1425,9 @@ void main()
         exitStressHarness();
     })
     .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        process.stderr.write(msg + "\n");
+        process.stderr.write(`${formatStressUncaughtError(err)}\n`);
+        process.stderr.write(
+            "Hint: match `requestId` in Spire logs (e.g. docker logs). For per-wall details set SPIRE_STRESS_VERBOSE=1, or use stress:web.\n",
+        );
         process.exit(1);
     });

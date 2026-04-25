@@ -12,8 +12,7 @@ import * as fsp from "node:fs/promises";
 
 import express from "express";
 
-import { XUtils } from "@vex-chat/crypto";
-import { type KeyPair, xSignOpen } from "@vex-chat/crypto";
+import { type KeyPair, XUtils } from "@vex-chat/crypto";
 import { PreKeysWSSchema, TokenScopes, UserSchema } from "@vex-chat/types";
 
 import cors from "cors";
@@ -29,6 +28,7 @@ import { POWER_LEVELS } from "../ClientManager.ts";
 import { JWT_EXPIRY } from "../Spire.ts";
 import { getJwtSecret } from "../utils/jwtSecret.ts";
 import { msgpack } from "../utils/msgpack.ts";
+import { spireXSignOpenAsync } from "../utils/spireXSignOpenAsync.ts";
 
 import { getAvatarRouter } from "./avatar.ts";
 import { errorHandler } from "./errors.ts";
@@ -584,7 +584,10 @@ export const initApp = (
             return;
         }
 
-        const regKey = xSignOpen(signed, XUtils.decodeHex(device.signKey));
+        const regKey = await spireXSignOpenAsync(
+            signed,
+            XUtils.decodeHex(device.signKey),
+        );
         if (
             regKey &&
             tokenValidator(uuidStringify(regKey), TokenScopes.Connect)
@@ -636,7 +639,7 @@ export const initApp = (
             return;
         }
 
-        const message = xSignOpen(
+        const message = await spireXSignOpenAsync(
             otk.signature,
             XUtils.decodeHex(device.signKey),
         );

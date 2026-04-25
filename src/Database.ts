@@ -32,7 +32,11 @@ import * as fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { XUtils } from "@vex-chat/crypto";
+import {
+    fipsEcdhRawPublicKeyFromEcdsaSpkiAsync,
+    getCryptoProfile,
+    XUtils,
+} from "@vex-chat/crypto";
 import { MailType } from "@vex-chat/types";
 
 import argon2 from "argon2";
@@ -130,17 +134,6 @@ export class Database extends EventEmitter {
     private readonly rawSqlite: InstanceType<typeof BetterSqlite3>;
 
     /**
-     * In-process cache for {@link retrieveUserDeviceList} when queried for a
-     * single owner. Libvex calls GET /user/:id/devices on every outgoing
-     * `forward()`; stress runs otherwise hammer SQLite with identical reads.
-     * Cleared on device create/delete and when the DB is closed.
-     */
-    private readonly userDeviceListCache = new Map<
-        string,
-        { devices: Device[]; until: number }
-    >();
-
-    /**
      * Short TTL cache for {@link retrieveEmojiList} (key = server id, stored as
      * `emojis.owner`). The noise harness fires `emoji.retrieveList` as a
      * follow-up on ~1/25 successful ops, so this path can contend on SQLite
@@ -151,7 +144,6 @@ export class Database extends EventEmitter {
         { rows: Emoji[]; until: number }
     >();
 
-    private static readonly USER_DEVICE_LIST_CACHE_TTL_MS = 10_000;
     private static readonly EMOJI_LIST_CACHE_TTL_MS = 10_000;
 
     constructor(options?: SpireOptions) {
@@ -251,7 +243,6 @@ export class Database extends EventEmitter {
     }
 
     public async close(): Promise<void> {
-        this.userDeviceListCache.clear();
         this.emojiListByServerCache.clear();
         await this.db.destroy();
     }
@@ -283,7 +274,6 @@ export class Database extends EventEmitter {
         };
 
         await this.db.insertInto("devices").values(device).execute();
-        this.userDeviceListCache.delete(owner);
 
         const medPreKeys = {
             deviceID: device.deviceID,
@@ -423,12 +413,6 @@ export class Database extends EventEmitter {
     }
 
     public async deleteDevice(deviceID: string): Promise<void> {
-        const ownerRow = await this.db
-            .selectFrom("devices")
-            .select("owner")
-            .where("deviceID", "=", deviceID)
-            .executeTakeFirst();
-
         await this.db
             .deleteFrom("preKeys")
             .where("deviceID", "=", deviceID)
@@ -444,10 +428,6 @@ export class Database extends EventEmitter {
             .set({ deleted: 1 })
             .where("deviceID", "=", deviceID)
             .execute();
-
-        if (ownerRow?.owner) {
-            this.userDeviceListCache.delete(ownerRow.owner);
-        }
     }
 
     public async deleteEmoji(emojiID: string): Promise<void> {
@@ -512,10 +492,15 @@ export class Database extends EventEmitter {
         if (!preKey) {
             throw new Error("Failed to get prekey.");
         }
+        const signKeyBytes = XUtils.decodeHex(device.signKey);
+        const signKey =
+            getCryptoProfile() === "fips"
+                ? await fipsEcdhRawPublicKeyFromEcdsaSpkiAsync(signKeyBytes)
+                : signKeyBytes;
         const keyBundle: KeyBundle = {
             otk,
             preKey,
-            signKey: XUtils.decodeHex(device.signKey),
+            signKey,
         };
         return keyBundle;
     }
@@ -942,37 +927,20 @@ export class Database extends EventEmitter {
         return row ? toUserRecord(row) : null;
     }
 
+    /**
+     * All devices for the given user ID(s), **no in-process cache** — a prior
+     * 10s TTL was removed: concurrent GET + POST could end with a stale
+     * snapshot overwriting the map after a new device was inserted (automation
+     * and `POST /user/:id/devices` must see a fresh list on the next read).
+     */
     public async retrieveUserDeviceList(userIDs: string[]): Promise<Device[]> {
-        const now = Date.now();
-        if (userIDs.length === 1) {
-            const owner = userIDs[0];
-            if (typeof owner === "string") {
-                const hit = this.userDeviceListCache.get(owner);
-                if (hit && hit.until > now) {
-                    return hit.devices.map((d) => ({ ...d }));
-                }
-            }
-        }
-
         const rows = await this.db
             .selectFrom("devices")
             .selectAll()
             .where("owner", "in", userIDs)
             .where("deleted", "=", 0)
             .execute();
-        const devices = rows.map(toDevice);
-
-        if (userIDs.length === 1) {
-            const owner = userIDs[0];
-            if (typeof owner === "string") {
-                this.userDeviceListCache.set(owner, {
-                    devices: devices.map((d) => ({ ...d })),
-                    until: now + Database.USER_DEVICE_LIST_CACHE_TTL_MS,
-                });
-            }
-        }
-
-        return devices;
+        return rows.map(toDevice);
     }
 
     public async retrieveUsers(): Promise<InternalUserRecord[]> {

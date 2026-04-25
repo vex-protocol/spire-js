@@ -20,13 +20,14 @@ http {
         "" close;
     }
 
+    # __SPIRE_UPSTREAM_PORT__ replaced at container start (Spire: 16777 unless API_PORT).
     upstream spire_backend {
-        server spire:16777;
+        server spire:__SPIRE_UPSTREAM_PORT__;
         keepalive 32;
     }
 
     server {
-        listen 8080;
+        listen 16777;
         client_max_body_size 50m;
 
         location / {

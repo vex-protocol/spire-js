@@ -7,3 +7,7 @@
 import { Spire } from "./Spire.ts";
 
 export { Spire };
+export {
+    DEFAULT_SPIRE_API_PORT,
+    resolveSpireListenPort,
+} from "./spireListenPort.ts";

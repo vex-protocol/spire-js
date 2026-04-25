@@ -72,7 +72,7 @@ jobs:
                   SOCKET_SECURITY_API_KEY: ${{ secrets.SOCKET_API_KEY }}
 
     stress:
-        name: stress
+        name: stress (tweetnacl)
         runs-on: ubuntu-latest
         steps:
             - name: Harden Runner
@@ -141,6 +141,101 @@ jobs:
                   exit 1
 
             # Informational only: does not fail the job (see continue-on-error). Default conc=25 in stress-cli-sweep.
+            - name: stress:cli (default matrix, informational)
+              continue-on-error: true
+              run: >-
+                  npm run stress:cli --
+                  --host 127.0.0.1:16777
+
+            - name: Spire logs on failure
+              if: failure()
+              run: docker logs "${{ env.SPIRE_CONTAINER_NAME }}" 2>&1 | tail -n 200 || true
+
+            - name: Tear down Spire container
+              if: always()
+              run: docker rm -f "${{ env.SPIRE_CONTAINER_NAME }}" 2>/dev/null || true
+
+    # Same as `stress` (tweetnacl: gen-spk.js, no SPIRE_FIPS) but P-256 + Web Crypto
+    # profile: gen-spk-fips.js and SPIRE_FIPS=true. Image build is shared pattern; each
+    # run uses a fresh GHA layer cache.
+    stress-fips:
+        name: stress (FIPS)
+        runs-on: ubuntu-latest
+        env:
+            SPIRE_CONTAINER_NAME: spire-stress-ci-fips
+            SPIRE_IMAGE_TAG: spire:stress-ci
+        steps:
+            - name: Harden Runner
+              uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+              with:
+                  egress-policy: audit
+
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              with:
+                  persist-credentials: false
+
+            - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+              with:
+                  node-version-file: .tool-versions
+                  cache: npm
+
+            - run: npm ci --prefer-offline
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+
+            - name: Build Spire image (layer cache)
+              uses: docker/build-push-action@1dc73863535b631f98b2378be8619f83b136f4a0 # v6.17.0
+              with:
+                  context: .
+                  push: false
+                  load: true
+                  tags: ${{ env.SPIRE_IMAGE_TAG }}
+                  cache-from: type=gha
+                  cache-to: type=gha,mode=min
+
+            # gen-spk-fips.js prints a hint line; only export the SPK/JWT assignments.
+            - name: Generate keys and DEV_API_KEY (FIPS)
+              run: |
+                  set -euo pipefail
+                  eval "$(node scripts/gen-spk-fips.js | grep -E '^(SPK=|JWT_SECRET=)')"
+                  echo "SPK=${SPK}" >> "${GITHUB_ENV}"
+                  echo "JWT_SECRET=${JWT_SECRET}" >> "${GITHUB_ENV}"
+                  echo "DEV_API_KEY=$(openssl rand -hex 16)" >> "${GITHUB_ENV}"
+
+            - name: Start Spire (Docker, SPIRE_FIPS=true)
+              run: |
+                  set -euo pipefail
+                  docker run -d --name "${{ env.SPIRE_CONTAINER_NAME }}" \
+                    -p 127.0.0.1:16777:16777 \
+                    -e NODE_ENV=production \
+                    -e DB_TYPE=sqlite3 \
+                    -e SPIRE_FIPS=true \
+                    -e "SPK=${SPK}" \
+                    -e "JWT_SECRET=${JWT_SECRET}" \
+                    -e "DEV_API_KEY=${DEV_API_KEY}" \
+                    "${{ env.SPIRE_IMAGE_TAG }}"
+
+            - name: Wait for /healthz
+              run: |
+                  set -euo pipefail
+                  for _ in $(seq 1 120); do
+                    if curl -sf --connect-timeout 2 "http://127.0.0.1:16777/healthz" >/dev/null; then
+                      echo "Spire is up."
+                      exit 0
+                    fi
+                    sleep 1
+                  done
+                  echo "Timed out waiting for Spire /healthz (FIPS may be slower to become ready)"
+                  exit 1
+
+            - name: Assert GET /status reports fips
+              run: |
+                  set -euo pipefail
+                  s=$(curl -sf --connect-timeout 5 "http://127.0.0.1:16777/status")
+                  echo "$s"
+                  echo "$s" | grep -qE '"cryptoProfile":"fips"'
+
             - name: stress:cli (default matrix, informational)
               continue-on-error: true
               run: >-
